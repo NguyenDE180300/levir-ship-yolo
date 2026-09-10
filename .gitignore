@@ -13,6 +13,7 @@ venv/
 
 # Data, model artefacts, and generated results
 data/
+yolo_data/
 datasets/
 runs/
 results/
@@ -30,3 +31,9 @@ outputs/
 hf_cache/
 downloads/
 packages/
+
+# Keep the directory-level usage notes/placeholders visible in Git.
+!data/README.md
+!yolo_data/README.md
+!runs/.gitkeep
+!results/.gitkeep
