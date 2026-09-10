@@ -1,0 +1,76 @@
+# YOLOv8_Input_ASRM_Auxiliary_Attention (Version 2)
+# Base: ultralytics/cfg/models/v8/yolov8-p2.yaml.
+#
+# How the raw input image reaches a module deep in the graph without editing
+# Ultralytics' forward loop: layer 0 is an `nn.Identity` that just re-emits the model
+# input. Ultralytics' generic multi-source gather (`ultralytics/nn/tasks.py`,
+# `BaseModel._predict_once`: `x = [x if j == -1 else y[j] for j in m.f]`) already
+# supports a list `from` field, so any later layer can read `f: [p2_index, 0]` to get
+# both P2 and the untouched raw image — no wrapper Model subclass needed.
+#
+# InputASRMAuxiliaryAttention (layer 11) is a pure side branch: its output is layer 3's
+# P2 tensor, UNCHANGED, and nothing downstream consumes layer 11's output — the neck's
+# P2 lateral connection (layer 19) reads raw layer-3 P2 directly, so the detection path
+# is byte-for-byte the plain P2 baseline. During training the module caches the
+# attention map on `model.model[11].last_attention_map` (and, in `window` attention
+# mode, the pre-sigmoid feature on `.last_attention_feature`) for an external training
+# loop to pull after `model(images)` and fold into an auxiliary loss; this repo does not
+# wire that loss up itself. With `enable_auxiliary_in_eval=False` (last yaml arg below)
+# the branch is skipped entirely outside training, so eval/inference cost and behaviour
+# match the plain baseline exactly.
+
+nc: 1 # LEVIR-Ship: single 'ship' class
+scales:
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.25, 512]
+
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, nn.Identity, []] # 0, raw input image tap (re-used by layer 11 via index 0)
+  - [-1, 1, Conv, [64, 3, 2]] # 1-P1/2
+  - [-1, 1, Conv, [128, 3, 2]] # 2-P2/4
+  - [-1, 3, C2f, [128, True]] # 3 (raw P2, this is what feeds both the trunk and the neck)
+  - [-1, 1, Conv, [256, 3, 2]] # 4-P3/8
+  - [-1, 6, C2f, [256, True]] # 5
+  - [-1, 1, Conv, [512, 3, 2]] # 6-P4/16
+  - [-1, 6, C2f, [512, True]] # 7
+  - [-1, 1, Conv, [1024, 3, 2]] # 8-P5/32
+  - [-1, 3, C2f, [1024, True]] # 9
+  - [-1, 1, SPPF, [1024, 5]] # 10
+  # InputASRMAuxiliaryAttention first positional arg (P2 channel count) is
+  # auto-injected from `ch[f[0]]`; yaml args are (embed_channels, srm_mode,
+  # attention_type, window_size, enable_auxiliary_in_eval).
+  - [[3, 0], 1, InputASRMAuxiliaryAttention, [64, "adaptive", "window", 8, False]] # 11, side branch only
+
+head:
+  # Explicit `10` (not implicit -1): layer 11 (InputASRMAuxiliaryAttention) sits
+  # between the backbone and the head, so -1 here would wrongly resolve to it
+  # instead of SPPF.
+  - [10, 1, nn.Upsample, [None, 2, "nearest"]] # 12
+  - [[-1, 7], 1, Concat, [1]] # 13, cat backbone P4
+  - [-1, 3, C2f, [512]] # 14
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 15
+  - [[-1, 5], 1, Concat, [1]] # 16, cat backbone P3
+  - [-1, 3, C2f, [256]] # 17
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 18
+  - [[-1, 3], 1, Concat, [1]] # 19, cat RAW backbone P2 (baseline path, aux branch untouched)
+  - [-1, 3, C2f, [128]] # 20 (P2/4-xsmall)
+
+  - [-1, 1, Conv, [128, 3, 2]] # 21
+  - [[-1, 17], 1, Concat, [1]] # 22, cat head P3
+  - [-1, 3, C2f, [256]] # 23 (P3/8-small)
+
+  - [-1, 1, Conv, [256, 3, 2]] # 24
+  - [[-1, 14], 1, Concat, [1]] # 25, cat head P4
+  - [-1, 3, C2f, [512]] # 26 (P4/16-medium)
+
+  - [-1, 1, Conv, [512, 3, 2]] # 27
+  - [[-1, 10], 1, Concat, [1]] # 28, cat backbone P5
+  - [-1, 3, C2f, [1024]] # 29 (P5/32-large)
+
+  - [[20, 23, 26, 29], 1, Detect, [nc]] # Detect(P2, P3, P4, P5) -- identical to plain baseline

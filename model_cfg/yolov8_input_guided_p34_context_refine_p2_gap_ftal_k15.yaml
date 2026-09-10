@@ -1,0 +1,35 @@
+# Original input-guided P2'/P3' refinement followed by the reference FPN-only
+# GAP + Factorized TAL neck. P5/P4/P3 are merged top-down; Detect sees P2 only.
+nc: 1
+scales:
+  n: [0.33, 0.25, 1024]
+
+backbone:
+  - [-1, 1, nn.Identity, []] # 0 raw image
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, True]] # 3 P2 detail
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, True]] # 5 P3
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, True]] # 7 P4
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, True]]
+  - [-1, 1, SPPF, [1024, 5]] # 10 P5 retained
+  # Identical to input_guided_context_refine_p2p3: target, peer detail,
+  # A2 guidance source, P4, P5, raw image.
+  - [[3, 5, 3, 7, 10, 0], 1, InputGuidedContextRefine, [32, "adaptive", "window", 8, 0.0, False]] # 11 P2'
+  - [[5, 3, 3, 7, 10, 0], 1, InputGuidedContextRefine, [32, "adaptive", "window", 8, 0.0, False]] # 12 P3'
+
+head:
+  - [10, 1, nn.Upsample, [None, 2, "nearest"]] # 13 P5 -> P4
+  - [[-1, 7], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]] # 15 FPN P4
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 16 P4 -> P3
+  - [[-1, 12], 1, Concat, [1]] # P3'
+  - [-1, 3, C2f, [256]] # 18 FPN P3
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 19 P3 -> P2
+  - [[-1, 11], 1, Concat, [1]] # P2'
+  - [-1, 3, C2f, [128]] # 21 fused FPN P2
+  - [-1, 1, ChannelAttention, []] # 22 GAP
+  - [[22], 1, Detect, [nc]] # Detect P2 only, stride 4

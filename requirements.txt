@@ -1,0 +1,15 @@
+numpy>=1.23.0
+matplotlib>=3.3.0
+opencv-python-headless>=4.6.0
+pillow>=7.1.2
+pyyaml>=5.3.1
+requests>=2.23.0
+scipy>=1.4.1
+# torch/torchvision are installed explicitly from the CUDA 13.0 PyTorch index
+# by the notebook before this file, preventing pip from selecting CPU wheels.
+psutil>=5.8.0
+polars>=0.20.0
+nvidia-ml-py>=12.0.0
+ultralytics-thop>=2.0.18
+pandas>=2.0
+huggingface_hub>=0.24

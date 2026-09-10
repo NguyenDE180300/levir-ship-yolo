@@ -1,0 +1,38 @@
+# RGB+Saturation Reference GAP + Factorized TAL K15 baseline with image-guided
+# ASRM context refinement. ASRM uses only K4/K12/K16 (best per directional
+# SRM family); raw residuals are attention evidence, never feature content.
+# Neck remains FPN-only P5 -> P4 -> P3 -> P2, GAP remains at F2, Detect is P2-only.
+nc: 1
+p2_offset_regression: false
+scale: n
+scales: {n: [0.33, 0.25, 1024]}
+
+backbone:
+  - [-1, 1, nn.Identity, []] # 0: raw RGB for ASRM branch
+  - [-1, 1, RGBColorAugment, [true, false]] # 1: RGB + saturation for backbone
+  - [-1, 1, Conv, [64, 3, 2]] # 2
+  - [-1, 1, Conv, [128, 3, 2]] # 3
+  - [-1, 3, C2f, [128, true]] # 4: raw P2
+  - [-1, 1, Conv, [256, 3, 2]] # 5
+  - [-1, 6, C2f, [256, true]] # 6: raw P3
+  - [-1, 1, Conv, [512, 3, 2]] # 7
+  - [-1, 6, C2f, [512, true]] # 8: P4
+  - [-1, 1, Conv, [1024, 3, 2]] # 9
+  - [-1, 3, C2f, [1024, true]] # 10
+  - [-1, 1, SPPF, [1024, 5]] # 11: P5
+  # target, peer, guidance P2, P4, P5, raw RGB; last arg selects K4/K12/K16.
+  - [[4, 6, 4, 8, 11, 0], 1, InputGuidedContextRefine, [32, adaptive, window, 8, 0.0, false, [4, 12, 16]]] # 12: P2'
+  - [[6, 4, 4, 8, 11, 0], 1, InputGuidedContextRefine, [32, adaptive, window, 8, 0.0, false, [4, 12, 16]]] # 13: P3'
+
+head:
+  - [11, 1, nn.Upsample, [null, 2, nearest]] # 14
+  - [[-1, 8], 1, Concat, [1]] # 15
+  - [-1, 3, C2f, [512]] # 16: FPN P4
+  - [-1, 1, nn.Upsample, [null, 2, nearest]] # 17
+  - [[-1, 13], 1, Concat, [1]] # 18
+  - [-1, 3, C2f, [256]] # 19: FPN P3
+  - [-1, 1, nn.Upsample, [null, 2, nearest]] # 20
+  - [[-1, 12], 1, Concat, [1]] # 21
+  - [-1, 3, C2f, [128]] # 22: FPN P2
+  - [-1, 1, ChannelAttention, []] # 23: GAP channel attention
+  - [[23], 1, Detect, [nc]] # 24: P2 only

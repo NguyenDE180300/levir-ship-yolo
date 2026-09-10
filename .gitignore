@@ -1,0 +1,32 @@
+# Python and notebook runtime state
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Local environments and editor files
+.venv/
+venv/
+*-venv/
+.idea/
+.vscode/
+
+# Data, model artefacts, and generated results
+data/
+datasets/
+runs/
+results/
+outputs/
+*.pt
+*.onnx
+*.engine
+*.csv
+
+# Credentials and Hugging Face caches
+*key*.txt
+*.token
+.env
+.cache/
+hf_cache/
+downloads/
+packages/

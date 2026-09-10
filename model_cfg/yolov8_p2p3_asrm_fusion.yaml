@@ -1,0 +1,63 @@
+# YOLOv8_P2P3_ASRM_Fusion (Version 1, extended to P2 + P3)
+# Base: ultralytics/cfg/models/v8/yolov8-p2.yaml (adds a P2/4 detect head for tiny ships).
+# Two independent P2ASRMFusion taps (same module class, reused as-is since it only
+# needs a channel count -- it is not P2-specific in code): one right after the P2
+# backbone stage, one right after the P3 backbone stage. Each gates a channel-wise SRM
+# residual back into its own level (X' = X + gamma * gate * R, gamma zero-init ->
+# identity at step 0), and only the fused P2'/P3' feed the neck's P2/P3 lateral
+# connections (layers 19 and 16). The backbone trunk that produces P3/P4/P5 from raw P2
+# (layers 3-10) still reads the RAW P2 (layer 2), and P4/P5 are never touched.
+
+nc: 1 # LEVIR-Ship: single 'ship' class
+scales:
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.25, 512]
+
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2
+  - [-1, 1, Conv, [128, 3, 2]] # 1-P2/4
+  - [-1, 3, C2f, [128, True]] # 2 (raw P2, feeds P3 trunk unchanged)
+  - [-1, 1, Conv, [256, 3, 2]] # 3-P3/8
+  - [-1, 6, C2f, [256, True]] # 4 (raw P3, feeds P4 trunk unchanged)
+  - [-1, 1, Conv, [512, 3, 2]] # 5-P4/16
+  - [-1, 6, C2f, [512, True]] # 6
+  - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32
+  - [-1, 3, C2f, [1024, True]] # 8
+  - [-1, 1, SPPF, [1024, 5]] # 9
+  # P2ASRMFusion's first positional arg (channel count) is auto-injected by
+  # parse_model from `ch[f]`; yaml args are (srm_mode, gate_type, gamma_init).
+  - [2, 1, P2ASRMFusion, ["adaptive", "spatial_channel", 0.0]] # 10 (P2' = fused P2)
+  - [4, 1, P2ASRMFusion, ["adaptive", "spatial_channel", 0.0]] # 11 (P3' = fused P3)
+
+head:
+  # Explicit `9` (not implicit -1): layers 10-11 (the two ASRM taps) now sit between
+  # the backbone and the head, so -1 here would wrongly resolve to layer 11.
+  - [9, 1, nn.Upsample, [None, 2, "nearest"]] # 12
+  - [[-1, 6], 1, Concat, [1]] # 13, cat backbone P4
+  - [-1, 3, C2f, [512]] # 14
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 15
+  - [[-1, 11], 1, Concat, [1]] # 16, cat fused P3' (NOT raw backbone P3)
+  - [-1, 3, C2f, [256]] # 17
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 18
+  - [[-1, 10], 1, Concat, [1]] # 19, cat fused P2' (NOT raw backbone P2)
+  - [-1, 3, C2f, [128]] # 20 (P2/4-xsmall)
+
+  - [-1, 1, Conv, [128, 3, 2]] # 21
+  - [[-1, 17], 1, Concat, [1]] # 22, cat head P3
+  - [-1, 3, C2f, [256]] # 23 (P3/8-small)
+
+  - [-1, 1, Conv, [256, 3, 2]] # 24
+  - [[-1, 14], 1, Concat, [1]] # 25, cat head P4
+  - [-1, 3, C2f, [512]] # 26 (P4/16-medium)
+
+  - [-1, 1, Conv, [512, 3, 2]] # 27
+  - [[-1, 9], 1, Concat, [1]] # 28, cat backbone P5
+  - [-1, 3, C2f, [1024]] # 29 (P5/32-large)
+
+  - [[20, 23, 26, 29], 1, Detect, [nc]] # Detect(P2, P3, P4, P5)
