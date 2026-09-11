@@ -34,6 +34,9 @@ CONFIGS = {
     "baseline_gap_factorized_k15_rgb_saturation": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation.yaml"
     ),
+    "baseline_gap_factorized_k15_rgb_saturation_fpn_p2_fusion": str(
+        MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_fpn_p2_fusion.yaml"
+    ),
     "baseline_gap_factorized_k15_rgb_saturation_quality": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_quality.yaml"
     ),
@@ -54,6 +57,11 @@ CONFIGS = {
     "baseline_gap_factorized_k15_rgb_saturation_asrm_k4k12k16_context_refine": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_asrm_k4k12k16_context_refine.yaml"
     ),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_k4k12k16_f2_guidance": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_k4k12k16_f2_guidance.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance.yaml"),
     "asrm_spg_fusion_p2_gap_ftal_k15": str(
         MODEL_CFG_DIR / "yolov8_asrm_spg_fusion_p2_gap_ftal_k15.yaml"
     ),

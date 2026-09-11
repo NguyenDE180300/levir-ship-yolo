@@ -10,7 +10,7 @@ collect_results.py.
 
 Hyperparameter defaults (imgsz=512, batch=8, pretrained=yolov8n.pt, 3 seeds via the
 notebook loop) match the reference yolov8n LEVIR-Ship setup this builds on top of
-(the reference implementation, train_all_levir_yolov8n_p2_routing.py) so any
+(https://github.com/Reference2408/yolo_code, train_all_levir_yolov8n_p2_routing.py) so any
 mAP delta is attributable to the ASRM architecture change, not a hyperparameter or
 init-weights difference.
 """
@@ -43,6 +43,9 @@ CONFIGS = {
     "baseline_gap_factorized_k15_rgb_saturation": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation.yaml"
     ),
+    "baseline_gap_factorized_k15_rgb_saturation_fpn_p2_fusion": str(
+        MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_fpn_p2_fusion.yaml"
+    ),
     "baseline_gap_factorized_k15_rgb_saturation_quality": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_quality.yaml"
     ),
@@ -62,6 +65,21 @@ CONFIGS = {
     ),
     "baseline_gap_factorized_k15_rgb_saturation_asrm_k4k12k16_context_refine": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_asrm_k4k12k16_context_refine.yaml"
+    ),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance": str(
+        MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance.yaml"
+    ),
+    "baseline_gap_factorized_k15_rgb_saturation_k4k12k16_f2_guidance": str(
+        MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_k4k12k16_f2_guidance.yaml"
+    ),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg": str(
+        MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg.yaml"
+    ),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance": str(
+        MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance.yaml"
+    ),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance": str(
+        MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance.yaml"
     ),
     "asrm_spg_fusion_p2_gap_ftal_k15": str(
         MODEL_CFG_DIR / "yolov8_asrm_spg_fusion_p2_gap_ftal_k15.yaml"
@@ -101,7 +119,7 @@ CONFIGS = {
     "p2guided_deform_conv_p3p4": str(MODEL_CFG_DIR / "yolov8_p2guided_deform_conv_p3p4.yaml"),
 }
 
-# Match reference implementation's Varroa `...gap_factorized_k15` supervision while
+# Match Reference2408/yolo_code's Varroa `...gap_factorized_k15` supervision while
 # preserving this repository's input-guided context-refine topology and P2--P5 Detect.
 CASE_TRAIN_OVERRIDES = {
     "baseline_gap_factorized_k15": {
@@ -138,6 +156,11 @@ CASE_TRAIN_OVERRIDES = {
         "factorized_tal_p2_only": True,
     },
     "baseline_gap_factorized_k15_rgb_saturation": {
+        "factorized_tal_target": True, "factorized_tal_tau": 0.75, "factorized_tal_kappa": 1.5,
+        "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
+        "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
+    },
+    "baseline_gap_factorized_k15_rgb_saturation_fpn_p2_fusion": {
         "factorized_tal_target": True, "factorized_tal_tau": 0.75, "factorized_tal_kappa": 1.5,
         "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
         "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
@@ -198,6 +221,31 @@ CASE_TRAIN_OVERRIDES = {
         "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
         "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15,
         "factorized_tal_p2_only": True,
+    },
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance": {
+        "factorized_tal_target": True, "factorized_tal_tau": 0.75, "factorized_tal_kappa": 1.5,
+        "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
+        "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
+    },
+    "baseline_gap_factorized_k15_rgb_saturation_k4k12k16_f2_guidance": {
+        "factorized_tal_target": True, "factorized_tal_tau": 0.75, "factorized_tal_kappa": 1.5,
+        "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
+        "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
+    },
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg": {
+        "factorized_tal_target": True, "factorized_tal_tau": 0.75, "factorized_tal_kappa": 1.5,
+        "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
+        "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
+    },
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance": {
+        "factorized_tal_target": True, "factorized_tal_tau": 0.75, "factorized_tal_kappa": 1.5,
+        "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
+        "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
+    },
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance": {
+        "factorized_tal_target": True, "factorized_tal_tau": 0.75, "factorized_tal_kappa": 1.5,
+        "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
+        "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
     },
     "asrm_spg_fusion_p2_gap_ftal_k15": {
         "factorized_tal_target": True,
@@ -260,7 +308,7 @@ CASE_TRAIN_OVERRIDES = {
 def load_pretrained(model: YOLO, case: str, pretrained: str) -> dict[str, int]:
     """Transfer-learn from a stock Ultralytics checkpoint (e.g. yolov8n.pt).
 
-    Mirrors the `remap_dbss_backbone` pattern in reference implementation's
+    Mirrors the `remap_dbss_backbone` pattern in Reference2408/yolo_code's
     train_all_levir_yolov8n_p2_routing.py: when a custom module shifts backbone layer
     indices, pretrained weights must be remapped by name before loading, otherwise
     Ultralytics' name+shape intersection silently transfers nothing for the backbone.
@@ -316,10 +364,22 @@ def load_pretrained(model: YOLO, case: str, pretrained: str) -> dict[str, int]:
         "direct": len(matched),
         "backbone_remapped": len(remapped),
         "input_conv_adapted": input_conv_adapted,
-        "method": "reference_smart_transfer_plus_shifted_backbone_remap",
+        "method": "baseline_smart_transfer_plus_shifted_backbone_remap",
     }
     print(f"Pretrained transfer from {pretrained} (case={case}): {report}")
     return report
+
+
+def collect_learned_guidance_scales(model: torch.nn.Module) -> dict[str, float]:
+    """Expose learned zero-init guidance scales in each completed run JSON."""
+    scales: dict[str, float] = {}
+    for name, module in model.named_modules():
+        if module.__class__.__name__ != "SRMF2Guidance":
+            continue
+        scales[f"{name}.gamma_srm"] = float(module.effective_gamma().detach().cpu())
+        if getattr(module, "use_saturation_guidance", False):
+            scales[f"{name}.gamma_saturation"] = float(module.gamma_saturation_raw.detach().cpu())
+    return scales
 
 
 def main() -> None:
@@ -377,7 +437,7 @@ def main() -> None:
         split="val",
         imgsz=args.image_size,
         batch=args.batch_size,
-        iou=0.5,  # Match reference implementation's LEVIR GAP+FTAL evaluation protocol.
+        iou=0.5,  # Match Reference2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
         project=str(work_root / args.case),
         name=f"seed_{args.seed}_val",
         exist_ok=True,
@@ -388,12 +448,13 @@ def main() -> None:
         split="test",
         imgsz=args.image_size,
         batch=args.batch_size,
-        iou=0.5,  # Match reference implementation's LEVIR GAP+FTAL evaluation protocol.
+        iou=0.5,  # Match Reference2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
         project=str(work_root / args.case),
         name=f"seed_{args.seed}_test",
         exist_ok=True,
         plots=False,
     )
+    learned_guidance = collect_learned_guidance_scales(best_model.model)
     payload = {
         "case": args.case,
         "seed": args.seed,
@@ -407,6 +468,7 @@ def main() -> None:
         "gflops": gflops,
         "runtime_seconds": time.time() - started,
         "best_checkpoint": str(Path(model.trainer.best)),
+        "learned_guidance": learned_guidance,
         "metrics": {
             "val": {
                 "bbox_mAP": float(val_metrics.box.map),

@@ -72,6 +72,7 @@ from ultralytics.nn.modules import (
     Conv2,
     ConvTranspose,
     Detect,
+    SRMClsDetect,
     DetectClsAttention,
     HVDecoupledDetect,
     P2NUDFLDetect,
@@ -108,12 +109,14 @@ from ultralytics.nn.modules import (
     P2GuidedLocalCrossAttention,
     SaturationFeatureFilter,
     SaturationGuidedP3Residual,
+    SaturationP2Cue,
     SaturationP2Residual,
     FilteredP2GuidedP3Residual,
     DualGateP2P3Residual,
     SaturationStemF2Residual,
     SaturationGuidedP3F2Residual,
     RegularizedSaturationF2Fusion,
+    SRMF2Guidance,
     LocalDetailRepC2f,
     P1FusionLocalDetail,
     P1GER,
@@ -2393,6 +2396,7 @@ def parse_model(d, ch, verbose=True):
         elif m in frozenset(
             {
                 Detect,
+                SRMClsDetect,
                 DetectClsAttention,
                 HVDecoupledDetect,
                 P2NUDFLDetect,
@@ -2437,7 +2441,7 @@ def parse_model(d, ch, verbose=True):
                 args.append(attn_type)
             else:
                 args.extend([reg_max, end2end, [ch[x] for x in f]])
-                if m in {Detect, HVDecoupledDetect, P2NUDFLDetect, P3NUDFLDetect}:
+                if m in {Detect, SRMClsDetect, HVDecoupledDetect, P2NUDFLDetect, P3NUDFLDetect}:
                     args.extend(
                         [
                             cls_geometry_fuse,
@@ -2463,6 +2467,7 @@ def parse_model(d, ch, verbose=True):
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             if m in {
                 Detect,
+                SRMClsDetect,
                 DetectClsAttention,
                 HVDecoupledDetect,
                 P2NUDFLDetect,
@@ -2526,13 +2531,16 @@ def parse_model(d, ch, verbose=True):
         elif m is ASRMDetailPriorDownsample:
             c2 = 1
             args = [ch[f] if isinstance(f, int) else ch[f[0]], *args]
+        elif m is SaturationP2Cue:
+            c2 = args[0]
+            args = [ch[f], *args]
         elif m in {SaturationP2Residual, SaturationGuidedP3Residual, SaturationFeatureFilter}:
             c2 = ch[f[0]]
             args = [[ch[x] for x in f], *args]
         elif m in {FilteredP2GuidedP3Residual, DualGateP2P3Residual}:
             c2 = ch[f[1]]
             args = [[ch[x] for x in f], *args]
-        elif m in {SaturationStemF2Residual, SaturationGuidedP3F2Residual, RegularizedSaturationF2Fusion}:
+        elif m in {SaturationStemF2Residual, SaturationGuidedP3F2Residual, RegularizedSaturationF2Fusion, SRMF2Guidance}:
             c2 = ch[f[0]]
             args = [[ch[x] for x in f], *args]
         else:

@@ -621,6 +621,42 @@ class P2NUDFLDetect(Detect):
         self.register_buffer("p2_dfl_bins", torch.tensor(P2_NUDFL_BINS), persistent=True)
 
 
+class SRMClsDetect(Detect):
+    """P2-only Detect with separately supplied regression and classification features.
+
+    This narrow wrapper exists only for the SRM classification-guidance ablation.
+    It leaves the regression input untouched while allowing the classification
+    tower to consume a separately guided F2 tensor. Standard :class:`Detect`
+    behaviour and all existing YAMLs remain unchanged.
+    """
+
+    def __init__(self, nc: int = 80, reg_max: int = 16, end2end: bool = False, ch: tuple = (), *args, **kwargs):
+        if len(ch) != 2:
+            raise ValueError(f"SRMClsDetect expects [F2_reg, F2_cls], got {ch}")
+        if ch[0] != ch[1]:
+            raise ValueError(f"SRMClsDetect requires matching F2 channels, got {ch}")
+        super().__init__(nc, reg_max, end2end, (ch[0],), *args, **kwargs)
+        self.last_reg_feature = None
+        self.last_cls_feature = None
+
+    def forward(self, x: list[torch.Tensor]):
+        if len(x) != 2:
+            raise ValueError("SRMClsDetect forward expects [F2_reg, F2_cls]")
+        reg_x, cls_x = x
+        self.last_reg_feature = reg_x.detach()
+        self.last_cls_feature = cls_x.detach()
+        preds = self.forward_head([reg_x], cls_x=[cls_x], **self.one2many)
+        if self.end2end:
+            one2one = self.forward_head([reg_x.detach()], cls_x=[cls_x.detach()], **self.one2one)
+            preds = {"one2many": preds, "one2one": one2one}
+        if self.training:
+            return preds
+        y = self._inference(preds["one2one"] if self.end2end else preds)
+        if self.end2end:
+            y = self.postprocess(y.permute(0, 2, 1))
+        return y if self.export else (y, preds)
+
+
 class HVDecoupledRegression(nn.Module):
     """Shared P2 regression stem with horizontal and vertical DFL towers."""
 

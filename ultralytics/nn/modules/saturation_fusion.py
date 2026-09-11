@@ -29,6 +29,42 @@ class SaturationP2Residual(nn.Module):
         self.last_shapes = {"P2": tuple(p2.shape), "S2": tuple(s2.shape), "P2_out": tuple(p2.shape)}
         return p2 + self.gamma * s2
 
+
+class SaturationP2Cue(nn.Module):
+    """A single lightweight saturation cue for the final P3→P2 FPN concat.
+
+    It consumes raw RGB only, generates HSV saturation at stride 4, and returns
+    ``alpha * S2``.  Unlike the other saturation modules, it neither modifies
+    P2/F2 nor uses any semantic feature/context.
+    """
+
+    def __init__(self, in_channels: int, out_channels: int = 16, alpha_init: float = 0.1):
+        super().__init__()
+        if in_channels != 3:
+            raise ValueError(f"SaturationP2Cue expects raw RGB (3 channels), got {in_channels}")
+        out_channels = int(out_channels)
+        if out_channels <= 0:
+            raise ValueError("out_channels must be positive")
+        self.out_channels = out_channels
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, out_channels, 3, stride=2, padding=1, bias=False),
+            _gn(out_channels),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, 3, stride=2, padding=1, bias=False),
+            _gn(out_channels),
+            nn.SiLU(inplace=True),
+        )
+        self.alpha = nn.Parameter(torch.tensor(float(alpha_init)))
+        self.last_s2 = None
+        self.last_effective_s2 = None
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        s2 = self.stem(_sat(image))
+        effective_s2 = self.alpha * s2
+        self.last_s2 = s2.detach()
+        self.last_effective_s2 = effective_s2.detach()
+        return effective_s2
+
 class SaturationGuidedP3Residual(nn.Module):
     def __init__(self, in_channels, embed_channels=32, gamma_init=0.0):
         super().__init__(); f2, p2, f3, image = in_channels
@@ -54,7 +90,7 @@ class SaturationFeatureFilter(nn.Module):
         c3 = F.interpolate(self.p3_proj(f3), size=size, mode="bilinear", align_corners=False); c4 = F.interpolate(self.p4_proj(f4), size=size, mode="bilinear", align_corners=False); context = w[:, 0:1] * c3 + w[:, 1:2] * c4; mask = torch.sigmoid(self.filter(torch.cat((p2e, context), 1))); out = f2 + self.gamma * mask * self.refine(context)
         self.last_shapes = {"P2": tuple(p2.shape), "F3": tuple(f3.shape), "F4": tuple(f4.shape), "S2": tuple(s2.shape), "F2_out": tuple(out.shape)}; return out
 
-__all__ = ("SaturationP2Residual", "SaturationGuidedP3Residual", "SaturationFeatureFilter")
+__all__ = ("SaturationP2Residual", "SaturationP2Cue", "SaturationGuidedP3Residual", "SaturationFeatureFilter")
 
 
 class FilteredP2GuidedP3Residual(nn.Module):

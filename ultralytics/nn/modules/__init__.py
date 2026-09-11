@@ -109,8 +109,9 @@ from .p2_guided_ops import (
 from .saturation_fusion import (
     DualGateP2P3Residual, FilteredP2GuidedP3Residual,
     RegularizedSaturationF2Fusion, SaturationFeatureFilter, SaturationGuidedP3F2Residual,
-    SaturationGuidedP3Residual, SaturationP2Residual, SaturationStemF2Residual,
+    SaturationGuidedP3Residual, SaturationP2Cue, SaturationP2Residual, SaturationStemF2Residual,
 )
+from .srm_f2_guidance import SRMF2Guidance
 from .conv import (
     CBAM,
     ChannelAttention,
@@ -138,6 +139,7 @@ from .head import (
     OBB26,
     Classify,
     Detect,
+    SRMClsDetect,
     DetectClsAttention,
     HVDecoupledDetect,
     HVDecoupledRegression,
@@ -240,6 +242,7 @@ __all__ = (
     "DeformableTransformerDecoder",
     "DeformableTransformerDecoderLayer",
     "Detect",
+    "SRMClsDetect",
     "HVDecoupledDetect",
     "HVDecoupledRegression",
     "Focus",
@@ -253,6 +256,7 @@ __all__ = (
     "InputASRMAuxiliaryAttention",
     "ASRMStructuralPrior",
     "SPGFusion",
+    "SRMF2Guidance",
     "ASRMDetailPriorDownsample",
     "ASRMP4SemanticVerifyResidual",
     "InputGuidedContextRefine",
@@ -284,6 +288,7 @@ __all__ = (
     "P2GuidedGatedModulation",
     "P2GuidedLocalCrossAttention",
     "SaturationP2Residual",
+    "SaturationP2Cue",
     "SaturationGuidedP3Residual",
     "SaturationFeatureFilter",
     "FilteredP2GuidedP3Residual",
