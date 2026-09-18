@@ -181,14 +181,15 @@ class SRMF2Guidance(nn.Module):
         self.last_residuals = None
         self.last_saturation_mask = None
         self.last_saturation_gamma = None
+        self.current_mask = None  # legacy diagnostic slot; must never retain a graph for EMA deepcopy
 
     def effective_gamma(self) -> torch.Tensor:
         if self.gamma_max > 0:
             return self.gamma_max * torch.tanh(self.gamma_raw)
         return self.gamma_raw
 
-    def forward(self, inputs):
-        f2, image = inputs
+    def make_mask(self, f2: torch.Tensor, image: torch.Tensor) -> torch.Tensor:
+        """Return the graph-connected SRM mask without caching it on the module."""
         gray = _grayscale(image)
         kernels = self.srm_kernels.to(dtype=gray.dtype)
         residuals = F.conv2d(gray, kernels, padding=2).abs()
@@ -196,6 +197,12 @@ class SRMF2Guidance(nn.Module):
             # Area downsampling preserves local response energy better than point sampling.
             residuals = F.interpolate(residuals, size=f2.shape[-2:], mode="area")
         mask = torch.sigmoid(self.mask_net(residuals))
+        self.last_residuals = residuals.detach()
+        return mask
+
+    def forward(self, inputs):
+        f2, image = inputs
+        mask = self.make_mask(f2, image)
         gamma = self.effective_gamma()
         out = f2 + gamma * mask * f2
         if self.use_saturation_guidance:
@@ -208,8 +215,8 @@ class SRMF2Guidance(nn.Module):
             self.last_saturation_gamma = self.gamma_saturation_raw.detach()
 
         self.last_mask = mask.detach()
+        self.current_mask = None
         self.last_gamma = gamma.detach()
-        self.last_residuals = residuals.detach()
         return (out, mask) if self.debug else out
 
 

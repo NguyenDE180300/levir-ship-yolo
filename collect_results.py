@@ -19,6 +19,12 @@ CASES = ("baseline_yolov8n_dbss_full", "baseline_gap_factorized_k15", "baseline_
          "asrm_context_p2guided_carafe_spd_neck", "p2guided_gate_p3p4",
          "p2guided_dynamic_conv_p3p4", "p2guided_cross_attention_p3p4",
          "p2guided_deform_conv_p3p4")
+CASES += (
+    "baseline_gap_factorized_k15_rgb_saturation_sagri_fpn_p2",
+    "baseline_gap_factorized_k15_rgb_saturation_mssen_f2",
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_semantic_gate",
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_edge_refine",
+)
 METRICS = ("bbox_mAP", "bbox_mAP_50", "bbox_mAP_75", "precision", "recall")
 SPLITS = ("val", "test")
 

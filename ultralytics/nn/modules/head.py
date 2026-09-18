@@ -622,32 +622,38 @@ class P2NUDFLDetect(Detect):
 
 
 class SRMClsDetect(Detect):
-    """P2-only Detect with separately supplied regression and classification features.
+    """Detect with SRM-guided classification at P2 and ordinary deeper levels.
 
-    This narrow wrapper exists only for the SRM classification-guidance ablation.
-    It leaves the regression input untouched while allowing the classification
-    tower to consume a separately guided F2 tensor. Standard :class:`Detect`
-    behaviour and all existing YAMLs remain unchanged.
+    The legacy two-input form ``[F2_reg, F2_cls]`` remains P2-only.  The
+    multi-level form ``[F2_reg, F2_cls, P3, P4]`` keeps the ASRM/semantic gate
+    exclusively on the P2 classification path while P3 and P4 use their
+    unmodified feature for both regression and classification.
     """
 
     def __init__(self, nc: int = 80, reg_max: int = 16, end2end: bool = False, ch: tuple = (), *args, **kwargs):
-        if len(ch) != 2:
-            raise ValueError(f"SRMClsDetect expects [F2_reg, F2_cls], got {ch}")
+        if len(ch) not in {2, 4}:
+            raise ValueError(f"SRMClsDetect expects [F2_reg, F2_cls] or [F2_reg, F2_cls, P3, P4], got {ch}")
         if ch[0] != ch[1]:
             raise ValueError(f"SRMClsDetect requires matching F2 channels, got {ch}")
-        super().__init__(nc, reg_max, end2end, (ch[0],), *args, **kwargs)
+        super().__init__(nc, reg_max, end2end, (ch[0], *ch[2:]), *args, **kwargs)
         self.last_reg_feature = None
         self.last_cls_feature = None
 
     def forward(self, x: list[torch.Tensor]):
-        if len(x) != 2:
-            raise ValueError("SRMClsDetect forward expects [F2_reg, F2_cls]")
-        reg_x, cls_x = x
+        if len(x) not in {2, 4}:
+            raise ValueError("SRMClsDetect forward expects [F2_reg, F2_cls] or [F2_reg, F2_cls, P3, P4]")
+        reg_x, cls_x, *deep_x = x
+        reg_features = [reg_x, *deep_x]
+        cls_features = [cls_x, *deep_x]
         self.last_reg_feature = reg_x.detach()
         self.last_cls_feature = cls_x.detach()
-        preds = self.forward_head([reg_x], cls_x=[cls_x], **self.one2many)
+        preds = self.forward_head(reg_features, cls_x=cls_features, **self.one2many)
         if self.end2end:
-            one2one = self.forward_head([reg_x.detach()], cls_x=[cls_x.detach()], **self.one2one)
+            one2one = self.forward_head(
+                [feature.detach() for feature in reg_features],
+                cls_x=[feature.detach() for feature in cls_features],
+                **self.one2one,
+            )
             preds = {"one2many": preds, "one2one": one2one}
         if self.training:
             return preds

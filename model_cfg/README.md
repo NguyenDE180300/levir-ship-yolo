@@ -1,5 +1,27 @@
 # LEVIR-Ship ASRM YOLOv8 variants
 
+## Post-FPN SRM spatial-guidance ablations
+
+The following four cases retain the RGB+Saturation YOLOv8n-P2 baseline exactly:
+the P5→P4→P3→P2 FPN-only neck, SPPF, ChannelAttention/GAP, P2-only Detect
+(stride 4), and Factorized TAL K15 training overrides.  SRM is evaluated only
+after normal FPN construction as a three-channel spatial-evidence branch; its
+fixed residual maps are never injected as feature content.  A zero-initialized
+learnable scale makes each case an exact identity at initialization.
+
+| Case | Fixed residual kernels | SRM use | Extra constraint |
+|---|---|---|---|
+| `baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance` | canonical compact SRM-3 | one mask gates final F2 | hidden width 32 |
+| `baseline_gap_factorized_k15_rgb_saturation_k4k12k16_f2_guidance` | K4, K12, K16 | same F2 mask architecture | isolates kernel selection |
+| `baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg` | canonical compact SRM-3 | final F2 mask | width 16, Dropout2d 0.10, `0.5*tanh(gamma_raw)` |
+| `baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance` | canonical compact SRM-3 | classification tower only | regression consumes untouched F2 |
+
+Implementation is shared in `ultralytics/nn/modules/srm_f2_guidance.py`.
+The case-specific `SRMClsDetect` wrapper preserves the normal Detect behavior
+for all other YAML files while permitting the fourth ablation to feed separate
+regression and classification F2 tensors.  Run `test_srm_f2_guidance.py` for
+the synthetic build/identity/gradient smoke test.
+
 ## RGB+Saturation + selected-ASRM context refine
 
 `yolov8_baseline_gap_factorized_k15_rgb_saturation_asrm_k4k12k16_context_refine.yaml`
@@ -184,7 +206,7 @@ paths exact identities at initialization. Detect remains P2/P3/P4/P5 with stride
 
 `Levir_ship_training_YOLO/run_experiment.py` transfer-learn từ `yolov8n.pt` thay vì
 train from scratch, để so sánh công bằng với baseline yolov8n LEVIR-Ship tham chiếu ở
-[`reference implementation`](the reference implementation)
+[`Baseline2408/yolo_code`](https://github.com/Baseline2408/yolo_code)
 (`train_all_levir_yolov8n_p2_routing.py`), vốn cũng transfer-learn. Ultralytics
 `Model.load()` khớp tensor theo **đúng tên layer + shape**
 (`ultralytics.nn.tasks.BaseModel.load` → `intersect_dicts`), nên với các case không có
@@ -211,17 +233,17 @@ transfer bằng 0. Detection head/P2/ASRM không có tensor tương ứng trong 
 stock thì giữ initialization của config hiện tại; đây là transfer learning, không phải
 resume nguyên một checkpoint đã train trên LEVIR-Ship.
 
-## Phạm vi so sánh với `reference implementation`
+## Phạm vi so sánh với `Baseline2408/yolo_code`
 
 Runner đóng gói tại `../Levir_ship_training_YOLO/run_experiment.py` dùng cùng
 `yolov8n.pt`, `imgsz=512`, `batch=8` và các seed 42/43/44 như baseline tham chiếu
-[`reference implementation`](the reference implementation). Khác biệt chủ đích là
+[`Baseline2408/yolo_code`](https://github.com/Baseline2408/yolo_code). Khác biệt chủ đích là
 module ASRM/P2. Tuy nhiên pipeline này giữ split theo **scene** (2728/584/584), còn
 script tham chiếu shuffle/cắt ngẫu nhiên theo crop (2320/788/788). Vì vậy:
 
 - dùng `baseline_p2` và các ASRM case còn lại trong cùng matrix này để kết luận delta
   kiến trúc;
-- không coi chênh lệch mAP tuyệt đối với bảng của `reference2408` là ablation trực tiếp;
+- không coi chênh lệch mAP tuyệt đối với bảng của `Baseline2408` là ablation trực tiếp;
 - mọi case trong matrix phải dùng cùng split, pretrained checkpoint, image size, batch,
   epoch, patience và seed.
 

@@ -112,6 +112,7 @@ from .saturation_fusion import (
     SaturationGuidedP3Residual, SaturationP2Cue, SaturationP2Residual, SaturationStemF2Residual,
 )
 from .srm_f2_guidance import SRMF2Guidance
+from .paper_guidance import ResidualMSSEnSimAM, SRMEdgeRefine, SRMSemanticGate, SaturationSAGRIFPNP2
 from .conv import (
     CBAM,
     ChannelAttention,
@@ -257,6 +258,10 @@ __all__ = (
     "ASRMStructuralPrior",
     "SPGFusion",
     "SRMF2Guidance",
+    "ResidualMSSEnSimAM",
+    "SRMEdgeRefine",
+    "SRMSemanticGate",
+    "SaturationSAGRIFPNP2",
     "ASRMDetailPriorDownsample",
     "ASRMP4SemanticVerifyResidual",
     "InputGuidedContextRefine",

@@ -117,6 +117,10 @@ from ultralytics.nn.modules import (
     SaturationGuidedP3F2Residual,
     RegularizedSaturationF2Fusion,
     SRMF2Guidance,
+    ResidualMSSEnSimAM,
+    SRMEdgeRefine,
+    SRMSemanticGate,
+    SaturationSAGRIFPNP2,
     LocalDetailRepC2f,
     P1FusionLocalDetail,
     P1GER,
@@ -2540,9 +2544,15 @@ def parse_model(d, ch, verbose=True):
         elif m in {FilteredP2GuidedP3Residual, DualGateP2P3Residual}:
             c2 = ch[f[1]]
             args = [[ch[x] for x in f], *args]
-        elif m in {SaturationStemF2Residual, SaturationGuidedP3F2Residual, RegularizedSaturationF2Fusion, SRMF2Guidance}:
+        elif m in {SaturationStemF2Residual, SaturationGuidedP3F2Residual, RegularizedSaturationF2Fusion, SRMF2Guidance, SRMEdgeRefine}:
             c2 = ch[f[0]]
             args = [[ch[x] for x in f], *args]
+        elif m in {SaturationSAGRIFPNP2, SRMSemanticGate}:
+            c2 = ch[f[0]]
+            args = [[ch[x] for x in f], *args]
+        elif m is ResidualMSSEnSimAM:
+            c2 = ch[f]
+            args = [c2, *args]
         else:
             c2 = ch[f]
 

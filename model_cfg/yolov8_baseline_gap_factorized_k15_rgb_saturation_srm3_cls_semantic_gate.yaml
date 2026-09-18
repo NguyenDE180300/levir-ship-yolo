@@ -1,0 +1,33 @@
+# SRM3 classification guidance at P2, with regular Detect branches at P3/P4.
+nc: 1
+p2_offset_regression: false
+scale: n
+scales: {n: [0.33, 0.25, 1024]}
+backbone:
+  - [-1, 1, nn.Identity, []]
+  - [-1, 1, RGBColorAugment, [true, false]]
+  - [-1, 1, Conv, [64, 3, 2]]
+  - [-1, 1, Conv, [128, 3, 2]]
+  - [-1, 3, C2f, [128, true]]
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [-1, 6, C2f, [256, true]]
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [-1, 6, C2f, [512, true]]
+  - [-1, 1, Conv, [1024, 3, 2]]
+  - [-1, 3, C2f, [1024, true]]
+  - [-1, 1, SPPF, [1024, 5]]
+head:
+  - [11, 1, nn.Upsample, [null, 2, nearest]]
+  - [[-1, 8], 1, Concat, [1]]
+  - [-1, 3, C2f, [512]]
+  - [-1, 1, nn.Upsample, [null, 2, nearest]]
+  - [[-1, 6], 1, Concat, [1]]
+  - [-1, 3, C2f, [256]]
+  - [-1, 1, nn.Upsample, [null, 2, nearest]]
+  - [[-1, 4], 1, Concat, [1]]
+  - [-1, 3, C2f, [128]]
+  - [-1, 1, ChannelAttention, []]
+  - [[21, 17, 14, 0], 1, SRMSemanticGate, []]
+  # P2 regression uses raw F2 (21), P2 classification uses ASRM/semantic-gated
+  # F2 (22); P3/P4 retain their original FPN features (17/14).
+  - [[21, 22, 17, 14], 1, SRMClsDetect, [nc]]

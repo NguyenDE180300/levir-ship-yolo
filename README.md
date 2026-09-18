@@ -1,6 +1,6 @@
 # LEVIR-Ship: YOLOv8-P2 baseline vs Adaptive-SRM variants
 
-Nền thực nghiệm là mirror của chính fork Ultralytics trong `reference implementation`.
+Nền thực nghiệm là mirror của chính fork Ultralytics trong `Baseline2408/yolo_code`.
 Baseline dùng nguyên YAML `yolov8n_p2_levir_baseline.yaml`, nguyên `Detect` và
 `model.load(..., smart_transfer=True)`: 3,352,396 tham số và 358 tensor transfer.
 Toàn bộ ASRM case chỉ thêm module/layer routing trên cùng nền này và cũng transfer
@@ -40,12 +40,12 @@ cần wrapper Model: xem `model_cfg/README.md`.
 CSV aggregate (gắn cột `dataset`) thành 1 DataFrame duy nhất — không gộp trị số mAP
 giữa 2 dataset, chỉ đặt cạnh nhau.
 
-## Setup khớp baseline tham chiếu (reference implementation)
+## Setup khớp baseline tham chiếu (Baseline2408/yolo_code)
 
 Hyperparameter mặc định của `run_experiment.py` (`pretrained=yolov8n.pt`, `imgsz=512`,
 `batch=8`, `epochs=100`, `patience=20`, 3 seed 42/43/44) được chỉnh để khớp baseline
 yolov8n LEVIR-Ship tham chiếu ở
-[`reference implementation`](the reference implementation)
+[`Baseline2408/yolo_code`](https://github.com/Baseline2408/yolo_code)
 (`train_all_levir_yolov8n_p2_routing.py`) — cùng transfer-learn từ `yolov8n.pt`, cùng
 imgsz/batch/seed và **cùng fixed data split**. Khác biệt chủ đích còn lại là kiến trúc
 P2: 3 biến thể ASRM ở đây thay cho DBSS/GCTS/HIT bên repo tham chiếu.
@@ -85,7 +85,7 @@ fixed split làm mốc.
 3. `prepare_yolo_data.py` build layout `images/{train,val,test}` + `labels/{train,val,test}`
    + `data.yaml` bằng **symlink** (không copy 863MB ảnh) từ `LevirShipData/All Images` +
    `All Annotations`, dùng fixed random crop split seed 42 giống hệt
-   `reference implementation`; file `split_manifest.json` lưu toàn bộ stem để kiểm tra.
+   `Baseline2408/yolo_code`; file `split_manifest.json` lưu toàn bộ stem để kiểm tra.
 4. `run_experiment.py --case <case> --seed <seed> --data-yaml data.yaml --pretrained
    yolov8n.pt ...` transfer-learn + train + test 1 (case, seed) qua
    `ultralytics.YOLO(...).train()/.val(split="test")`, ghi `test_metrics.json` vào

@@ -62,6 +62,10 @@ CONFIGS = {
     "baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_f2_guidance_reg.yaml"),
     "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_cls_guidance.yaml"),
     "baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_sagri_fpn_p2": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_sagri_fpn_p2.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_mssen_f2": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_mssen_f2.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_semantic_gate": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_cls_semantic_gate.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_edge_refine": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_cls_edge_refine.yaml"),
     "asrm_spg_fusion_p2_gap_ftal_k15": str(
         MODEL_CFG_DIR / "yolov8_asrm_spg_fusion_p2_gap_ftal_k15.yaml"
     ),
@@ -109,11 +113,14 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--device", default="cuda")
     p.add_argument("--image-size", type=int, default=256)
+    p.add_argument("--cases", nargs="+", choices=sorted(CONFIGS), default=None)
     args = p.parse_args()
     device = args.device if (args.device != "cuda" or torch.cuda.is_available()) else "cpu"
     if args.device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but unavailable")
-    for name, cfg in CONFIGS.items():
+    selected = args.cases or CONFIGS.keys()
+    for name in selected:
+        cfg = CONFIGS[name]
         model = DetectionModel(cfg, ch=3, nc=1, verbose=False).to(device)
         model.train()
         x = torch.rand(2, 3, args.image_size, args.image_size, device=device)

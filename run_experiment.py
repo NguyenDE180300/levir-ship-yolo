@@ -10,7 +10,7 @@ collect_results.py.
 
 Hyperparameter defaults (imgsz=512, batch=8, pretrained=yolov8n.pt, 3 seeds via the
 notebook loop) match the reference yolov8n LEVIR-Ship setup this builds on top of
-(https://github.com/Reference2408/yolo_code, train_all_levir_yolov8n_p2_routing.py) so any
+(https://github.com/Baseline2408/yolo_code, train_all_levir_yolov8n_p2_routing.py) so any
 mAP delta is attributable to the ASRM architecture change, not a hyperparameter or
 init-weights difference.
 """
@@ -81,6 +81,10 @@ CONFIGS = {
     "baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_saturation_cls_guidance.yaml"
     ),
+    "baseline_gap_factorized_k15_rgb_saturation_sagri_fpn_p2": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_sagri_fpn_p2.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_mssen_f2": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_mssen_f2.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_semantic_gate": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_cls_semantic_gate.yaml"),
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_edge_refine": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_rgb_saturation_srm3_cls_edge_refine.yaml"),
     "asrm_spg_fusion_p2_gap_ftal_k15": str(
         MODEL_CFG_DIR / "yolov8_asrm_spg_fusion_p2_gap_ftal_k15.yaml"
     ),
@@ -119,7 +123,7 @@ CONFIGS = {
     "p2guided_deform_conv_p3p4": str(MODEL_CFG_DIR / "yolov8_p2guided_deform_conv_p3p4.yaml"),
 }
 
-# Match Reference2408/yolo_code's Varroa `...gap_factorized_k15` supervision while
+# Match Baseline2408/yolo_code's Varroa `...gap_factorized_k15` supervision while
 # preserving this repository's input-guided context-refine topology and P2--P5 Detect.
 CASE_TRAIN_OVERRIDES = {
     "baseline_gap_factorized_k15": {
@@ -247,6 +251,10 @@ CASE_TRAIN_OVERRIDES = {
         "factorized_tal_lambda": 0.5, "factorized_tal_s_max": 32.0,
         "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True,
     },
+    "baseline_gap_factorized_k15_rgb_saturation_sagri_fpn_p2": {"factorized_tal_target": True, "factorized_tal_tau": .75, "factorized_tal_kappa": 1.5, "factorized_tal_lambda": .5, "factorized_tal_s_max": 32., "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True},
+    "baseline_gap_factorized_k15_rgb_saturation_mssen_f2": {"factorized_tal_target": True, "factorized_tal_tau": .75, "factorized_tal_kappa": 1.5, "factorized_tal_lambda": .5, "factorized_tal_s_max": 32., "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True},
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_semantic_gate": {"factorized_tal_target": True, "factorized_tal_tau": .75, "factorized_tal_kappa": 1.5, "factorized_tal_lambda": .5, "factorized_tal_s_max": 32., "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": False},
+    "baseline_gap_factorized_k15_rgb_saturation_srm3_cls_edge_refine": {"factorized_tal_target": True, "factorized_tal_tau": .75, "factorized_tal_kappa": 1.5, "factorized_tal_lambda": .5, "factorized_tal_s_max": 32., "factorized_tal_warmup_start": 5, "factorized_tal_warmup_end": 15, "factorized_tal_p2_only": True},
     "asrm_spg_fusion_p2_gap_ftal_k15": {
         "factorized_tal_target": True,
         "factorized_tal_tau": 0.75,
@@ -308,7 +316,7 @@ CASE_TRAIN_OVERRIDES = {
 def load_pretrained(model: YOLO, case: str, pretrained: str) -> dict[str, int]:
     """Transfer-learn from a stock Ultralytics checkpoint (e.g. yolov8n.pt).
 
-    Mirrors the `remap_dbss_backbone` pattern in Reference2408/yolo_code's
+    Mirrors the `remap_dbss_backbone` pattern in Baseline2408/yolo_code's
     train_all_levir_yolov8n_p2_routing.py: when a custom module shifts backbone layer
     indices, pretrained weights must be remapped by name before loading, otherwise
     Ultralytics' name+shape intersection silently transfers nothing for the backbone.
@@ -395,6 +403,8 @@ def main() -> None:
     parser.add_argument("--image-size", type=int, default=512)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=20)
+    parser.add_argument("--lr0", type=float, default=None,
+                        help="optional initial learning-rate override; uses the standard hyperparameter value when omitted")
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA GPU is required for this experiment")
@@ -412,6 +422,8 @@ def main() -> None:
     # Experiment policy from 2026-09-08 onward: train every newly launched case
     # without mosaic. Historical result folders retain their original settings.
     train_overrides = {"mosaic": 0.0, **CASE_TRAIN_OVERRIDES.get(args.case, {})}
+    if args.lr0 is not None:
+        train_overrides["lr0"] = args.lr0
     model.train(
         data=str(args.data_yaml.resolve()),
         epochs=args.epochs,
@@ -437,7 +449,7 @@ def main() -> None:
         split="val",
         imgsz=args.image_size,
         batch=args.batch_size,
-        iou=0.5,  # Match Reference2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
+        iou=0.5,  # Match Baseline2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
         project=str(work_root / args.case),
         name=f"seed_{args.seed}_val",
         exist_ok=True,
@@ -448,7 +460,7 @@ def main() -> None:
         split="test",
         imgsz=args.image_size,
         batch=args.batch_size,
-        iou=0.5,  # Match Reference2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
+        iou=0.5,  # Match Baseline2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
         project=str(work_root / args.case),
         name=f"seed_{args.seed}_test",
         exist_ok=True,
