@@ -205,16 +205,13 @@ paths exact identities at initialization. Detect remains P2/P3/P4/P5 with stride
 4/8/16/32.
 
 `Levir_ship_training_YOLO/run_experiment.py` transfer-learn từ `yolov8n.pt` thay vì
-train from scratch, để so sánh công bằng với baseline yolov8n LEVIR-Ship tham chiếu ở
-[`Baseline2408/yolo_code`](https://github.com/Baseline2408/yolo_code)
-(`train_all_levir_yolov8n_p2_routing.py`), vốn cũng transfer-learn. Ultralytics
+train from scratch. Ultralytics
 `Model.load()` khớp tensor theo **đúng tên layer + shape**
 (`ultralytics.nn.tasks.BaseModel.load` → `intersect_dicts`), nên với các case không có
 `nn.Identity` (backbone layer 0-9 giữ nguyên index như `yolov8n.pt`) chỉ cần gọi thẳng
 `.load('yolov8n.pt')`. Với các case có `nn.Identity` chèn ở layer 0 (dịch toàn bộ
-backbone +1 — xem mục trên), phải tự remap tên layer trước khi load, cùng nguyên lý với
-hàm `remap_dbss_backbone` trong repo tham chiếu đó (họ cũng phải remap vì DBSS chèn
-thêm 1 layer ở đầu backbone). Đã test: cả 6 case đều transfer đúng tensor backbone
+backbone +1 — xem mục trên), phải tự remap tên layer trước khi load. Đã test: cả 6
+case đều transfer đúng tensor backbone
 (kiểm bằng so sánh trực tiếp giá trị weight sau khi load với checkpoint gốc).
 
 | Case | Backbone index so với `yolov8n.pt` | Cách transfer |
@@ -233,17 +230,16 @@ transfer bằng 0. Detection head/P2/ASRM không có tensor tương ứng trong 
 stock thì giữ initialization của config hiện tại; đây là transfer learning, không phải
 resume nguyên một checkpoint đã train trên LEVIR-Ship.
 
-## Phạm vi so sánh với `Baseline2408/yolo_code`
+## Phạm vi so sánh baseline
 
-Runner đóng gói tại `../Levir_ship_training_YOLO/run_experiment.py` dùng cùng
-`yolov8n.pt`, `imgsz=512`, `batch=8` và các seed 42/43/44 như baseline tham chiếu
-[`Baseline2408/yolo_code`](https://github.com/Baseline2408/yolo_code). Khác biệt chủ đích là
-module ASRM/P2. Tuy nhiên pipeline này giữ split theo **scene** (2728/584/584), còn
-script tham chiếu shuffle/cắt ngẫu nhiên theo crop (2320/788/788). Vì vậy:
+Runner đóng gói tại `../Levir_ship_training_YOLO/run_experiment.py` dùng
+`yolov8n.pt`, `imgsz=512`, `batch=8` và các seed 42/43/44. Khác biệt chủ đích là
+module ASRM/P2. Pipeline này giữ split theo **scene** (2728/584/584), còn một
+protocol crop-level dùng shuffle/cắt ngẫu nhiên theo crop (2320/788/788). Vì vậy:
 
 - dùng `baseline_p2` và các ASRM case còn lại trong cùng matrix này để kết luận delta
   kiến trúc;
-- không coi chênh lệch mAP tuyệt đối với bảng của `Baseline2408` là ablation trực tiếp;
+- không coi chênh lệch mAP tuyệt đối giữa các protocol khác nhau là ablation trực tiếp;
 - mọi case trong matrix phải dùng cùng split, pretrained checkpoint, image size, batch,
   epoch, patience và seed.
 

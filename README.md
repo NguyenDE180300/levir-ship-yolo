@@ -1,10 +1,12 @@
 # LEVIR-Ship: YOLOv8-P2 baseline vs Adaptive-SRM variants
 
-Nền thực nghiệm là mirror của chính fork Ultralytics trong `Baseline2408/yolo_code`.
-Baseline dùng nguyên YAML `yolov8n_p2_levir_baseline.yaml`, nguyên `Detect` và
-`model.load(..., smart_transfer=True)`: 3,352,396 tham số và 358 tensor transfer.
-Toàn bộ ASRM case chỉ thêm module/layer routing trên cùng nền này và cũng transfer
-358 tensor theo đúng loader A Duy.
+Nền thực nghiệm dùng YOLOv8n-P2 với YAML `yolov8n_p2_levir_baseline.yaml`,
+`Detect` chuẩn và pretrained transfer qua `model.load(..., smart_transfer=True)`:
+3,352,396 tham số và 358 tensor transfer. Toàn bộ ASRM case chỉ thêm module/layer
+routing trên cùng nền này.
+
+> **Naming policy:** YAML và tên experiment công khai dùng tiền tố `baseline_` hoặc
+> tên module/mục tiêu kỹ thuật; không dùng tên cá nhân hoặc tên repository bên ngoài.
 
 Code training độc lập cho phía YOLO, chạy song song với `Levir_ship_training/` (phía
 mmdet). Dùng bản Ultralytics local đóng gói sẵn trong `ultralytics/` (dựa trên
@@ -40,22 +42,17 @@ cần wrapper Model: xem `model_cfg/README.md`.
 CSV aggregate (gắn cột `dataset`) thành 1 DataFrame duy nhất — không gộp trị số mAP
 giữa 2 dataset, chỉ đặt cạnh nhau.
 
-## Setup khớp baseline tham chiếu (Baseline2408/yolo_code)
+## Setup baseline thống nhất
 
-Hyperparameter mặc định của `run_experiment.py` (`pretrained=yolov8n.pt`, `imgsz=512`,
-`batch=8`, `epochs=100`, `patience=20`, 3 seed 42/43/44) được chỉnh để khớp baseline
-yolov8n LEVIR-Ship tham chiếu ở
-[`Baseline2408/yolo_code`](https://github.com/Baseline2408/yolo_code)
-(`train_all_levir_yolov8n_p2_routing.py`) — cùng transfer-learn từ `yolov8n.pt`, cùng
-imgsz/batch/seed và **cùng fixed data split**. Khác biệt chủ đích còn lại là kiến trúc
-P2: 3 biến thể ASRM ở đây thay cho DBSS/GCTS/HIT bên repo tham chiếu.
+`run_experiment.py` dùng `pretrained=yolov8n.pt`, `imgsz=512`, `batch=8`,
+`epochs=100`, `patience=20` và ba seed 42/43/44. Các case so sánh cùng
+transfer-learn, input size, batch, seed và **fixed data split**; khác biệt chủ đích
+là kiến trúc/loss của từng experiment.
 
-`prepare_yolo_data.py` sao chép đúng thuật toán của
-`create_fixed_split()`: sort 3.896 crop stem, `random.Random(42).shuffle(stems)`, rồi
-cắt tuần tự train/val/test = **2320/788/788**. Split seed 42 là cố định và dùng chung
-cho cả ba training seed 42/43/44. Lưu ý đây là random split theo crop nên vẫn có nguy
-cơ crop từ cùng scene xuất hiện ở nhiều split; lựa chọn này nhằm đồng bộ benchmark với
-repo tham chiếu.
+`prepare_yolo_data.py` sort 3.896 crop stem, dùng `random.Random(42).shuffle(stems)`,
+rồi cắt tuần tự train/val/test = **2320/788/788**. Split seed 42 là cố định và dùng
+chung cho cả ba training seed 42/43/44. Đây là random split theo crop nên vẫn có nguy
+cơ crop từ cùng scene xuất hiện ở nhiều split.
 
 ### Pretrained transfer của từng case
 
@@ -84,8 +81,8 @@ fixed split làm mốc.
 2. `pip install -r requirements.txt`.
 3. `prepare_yolo_data.py` build layout `images/{train,val,test}` + `labels/{train,val,test}`
    + `data.yaml` bằng **symlink** (không copy 863MB ảnh) từ `LevirShipData/All Images` +
-   `All Annotations`, dùng fixed random crop split seed 42 giống hệt
-   `Baseline2408/yolo_code`; file `split_manifest.json` lưu toàn bộ stem để kiểm tra.
+   `All Annotations`, dùng fixed random crop split seed 42; file
+   `split_manifest.json` lưu toàn bộ stem để kiểm tra.
 4. `run_experiment.py --case <case> --seed <seed> --data-yaml data.yaml --pretrained
    yolov8n.pt ...` transfer-learn + train + test 1 (case, seed) qua
    `ultralytics.YOLO(...).train()/.val(split="test")`, ghi `test_metrics.json` vào
@@ -95,8 +92,8 @@ fixed split làm mốc.
 
 ## Trạng thái đã kiểm chứng (trước khi đưa lên HF)
 
-- `prepare_yolo_data.py` đã chạy trên bản data mirror local, ra đúng 2320/788/788,
-  không trùng stem giữa split và khớp từng stem với thuật toán repo tham chiếu.
+- `prepare_yolo_data.py` đã chạy trên bản data mirror local, ra đúng 2320/788/788 và
+  không trùng stem giữa split.
 - Cả 4 config đã chạy **thật** qua `ultralytics.YOLO(...).train()` + `.val(split="test")`
   (CPU, 1 epoch, ảnh thật cỡ nhỏ) — dataloader đọc đúng label, loss/backward/checkpoint/
   validate không lỗi cho cả baseline lẫn 3 biến thể ASRM.

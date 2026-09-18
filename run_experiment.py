@@ -9,10 +9,8 @@ are directly comparable; run once per (case, seed) and aggregate across seeds wi
 collect_results.py.
 
 Hyperparameter defaults (imgsz=512, batch=8, pretrained=yolov8n.pt, 3 seeds via the
-notebook loop) match the reference yolov8n LEVIR-Ship setup this builds on top of
-(https://github.com/Baseline2408/yolo_code, train_all_levir_yolov8n_p2_routing.py) so any
-mAP delta is attributable to the ASRM architecture change, not a hyperparameter or
-init-weights difference.
+notebook loop) define a fixed YOLOv8n-P2 protocol, so any mAP delta is attributable
+to the experiment architecture rather than hyperparameter or initialization drift.
 """
 from __future__ import annotations
 
@@ -123,8 +121,8 @@ CONFIGS = {
     "p2guided_deform_conv_p3p4": str(MODEL_CFG_DIR / "yolov8_p2guided_deform_conv_p3p4.yaml"),
 }
 
-# Match Baseline2408/yolo_code's Varroa `...gap_factorized_k15` supervision while
-# preserving this repository's input-guided context-refine topology and P2--P5 Detect.
+# Fixed Factorized-TAL K15 supervision while preserving this repository's
+# input-guided context-refine topology and P2--P5 Detect.
 CASE_TRAIN_OVERRIDES = {
     "baseline_gap_factorized_k15": {
         "factorized_tal_target": True,
@@ -316,10 +314,9 @@ CASE_TRAIN_OVERRIDES = {
 def load_pretrained(model: YOLO, case: str, pretrained: str) -> dict[str, int]:
     """Transfer-learn from a stock Ultralytics checkpoint (e.g. yolov8n.pt).
 
-    Mirrors the `remap_dbss_backbone` pattern in Baseline2408/yolo_code's
-    train_all_levir_yolov8n_p2_routing.py: when a custom module shifts backbone layer
-    indices, pretrained weights must be remapped by name before loading, otherwise
-    Ultralytics' name+shape intersection silently transfers nothing for the backbone.
+    When a custom module shifts backbone-layer indices, pretrained weights must be
+    remapped by name before loading; otherwise Ultralytics' name+shape intersection
+    silently transfers nothing for the backbone.
     """
     if not pretrained:
         return {"total": 0}
@@ -449,7 +446,7 @@ def main() -> None:
         split="val",
         imgsz=args.image_size,
         batch=args.batch_size,
-        iou=0.5,  # Match Baseline2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
+        iou=0.5,  # Fixed LEVIR GAP+FTAL evaluation protocol.
         project=str(work_root / args.case),
         name=f"seed_{args.seed}_val",
         exist_ok=True,
@@ -460,7 +457,7 @@ def main() -> None:
         split="test",
         imgsz=args.image_size,
         batch=args.batch_size,
-        iou=0.5,  # Match Baseline2408/yolo_code's LEVIR GAP+FTAL evaluation protocol.
+        iou=0.5,  # Fixed LEVIR GAP+FTAL evaluation protocol.
         project=str(work_root / args.case),
         name=f"seed_{args.seed}_test",
         exist_ok=True,

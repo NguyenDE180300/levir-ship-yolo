@@ -1,4 +1,4 @@
-# Exact A Duy P2 baseline with only the P3->P2 nearest upsample replaced by CARAFE.
+# P2 baseline with only the P3->P2 nearest upsample replaced by CARAFE.
 nc: 1
 p2_offset_regression: false
 scale: n

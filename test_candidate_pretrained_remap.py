@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the exact A Duy fork + smart-transfer basis for all eight cases."""
+"""Verify smart-transfer/remapping behaviour for all registered cases."""
 from ultralytics.nn.tasks import DetectionModel
 from ultralytics.utils.torch_utils import intersect_dicts
 
