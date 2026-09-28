@@ -161,6 +161,8 @@ CONFIGS = {
     "baseline_gap_factorized_k15_local_chroma_contrast_shared_p2p3_senetv2_ensimam_asf_ftsc_f5_p2p3p4": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_local_chroma_contrast_shared_p2p3_senetv2_ensimam_asf_ftsc_f5_p2p3p4.yaml"
     ),
+    "baseline_gap_factorized_k15_local_chroma_contrast_p2p3_nosasf_ftsc_f5_p2p3p4": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_local_chroma_contrast_p2p3_nosasf_ftsc_f5_p2p3p4.yaml"),
+    "baseline_gap_factorized_k15_local_chroma_contrast_cls_guidance_p2p3_nosasf_ftsc_f5_p2p3p4": str(MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_local_chroma_contrast_cls_guidance_p2p3_nosasf_ftsc_f5_p2p3p4.yaml"),
     "baseline_gap_factorized_k15_contrast_cls_p2p3p4_senetv2_ensimam_asf_ftsc_f5_p2p3p4": str(
         MODEL_CFG_DIR / "yolov8_baseline_gap_factorized_k15_contrast_cls_p2p3p4_senetv2_ensimam_asf_ftsc_f5_p2p3p4.yaml"
     ),

@@ -6,13 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def explicit_cue(rgb: torch.Tensor, cue: str, eps: float = 1e-6) -> torch.Tensor:
+def explicit_cue(rgb: torch.Tensor, cue: str, eps: float = 1e-6, window: int = 7) -> torch.Tensor:
     """Return one stable [B,1,H,W] cue from normal RGB in [0,1]."""
     if rgb.ndim != 4 or rgb.shape[1] != 3:
         raise ValueError(f"explicit cue expects RGB [B,3,H,W], got {tuple(rgb.shape)}")
     y = .299 * rgb[:, 0:1] + .587 * rgb[:, 1:2] + .114 * rgb[:, 2:3]
     if cue == "contrast":
-        mu = F.avg_pool2d(y, 7, 1, 3)
+        mu = F.avg_pool2d(y, window, 1, window // 2)
         return (torch.abs(y - mu) / (mu + eps)).clamp_(0, 5) / 5
     if cue == "local_chroma_contrast":
         # Chroma is the local colour spread (max RGB - min RGB).  Comparing it
@@ -20,7 +20,7 @@ def explicit_cue(rgb: torch.Tensor, cue: str, eps: float = 1e-6) -> torch.Tensor
         # similarly bright but chromatically uniform background, while keeping
         # the cue deterministic and differentiable.
         chroma = rgb.amax(dim=1, keepdim=True) - rgb.amin(dim=1, keepdim=True)
-        mu = F.avg_pool2d(chroma, 7, 1, 3)
+        mu = F.avg_pool2d(chroma, window, 1, window // 2)
         return (torch.abs(chroma - mu) / (mu + eps)).clamp_(0, 5) / 5
     if cue == "scharr":
         kx = y.new_tensor(((-3., 0., 3.), (-10., 0., 10.), (-3., 0., 3.))).view(1, 1, 3, 3)
