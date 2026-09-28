@@ -34,8 +34,9 @@ def zeropower_via_newtonschulz5(G: torch.Tensor, eps: float = 1e-7) -> torch.Ten
         - Output approximates US'V^T where S' has diagonal entries ~ Uniform(0.5, 1.5).
         - Does not produce exact UV^T but works well empirically for neural network optimization.
     """
-    assert len(G.shape) == 2
-    X = G.bfloat16()
+    if G.ndim < 2:
+        raise ValueError(f"Muon Newton-Schulz requires at least 2 dimensions, got {tuple(G.shape)}")
+    X = G.reshape(G.shape[0], -1).bfloat16()
     X /= X.norm() + eps  # ensure top singular value <= 1
     if G.size(0) > G.size(1):
         X = X.T
@@ -89,11 +90,17 @@ def muon_update(grad: torch.Tensor, momentum: torch.Tensor, beta: float = 0.95, 
     """
     momentum.lerp_(grad, 1 - beta)
     update = grad.lerp(momentum, beta) if nesterov else momentum
-    if update.ndim == 4:  # for the case of conv filters
-        update = update.view(len(update), -1)
+    # Orthogonalize every matrix-shaped parameter. Convolution and Conv3d
+    # kernels are flattened across all dimensions after the output-channel
+    # axis; scalar/vector parameters are routed to the SGD groups by the
+    # trainer and never enter this function.
+    original_shape = update.shape
+    if update.ndim > 2:
+        update = update.reshape(update.shape[0], -1)
+    rows, cols = update.shape
     update = zeropower_via_newtonschulz5(update)
-    update *= max(1, grad.size(-2) / grad.size(-1)) ** 0.5
-    return update
+    update *= max(1, rows / cols) ** 0.5
+    return update.reshape(original_shape)
 
 
 class MuSGD(optim.Optimizer):
