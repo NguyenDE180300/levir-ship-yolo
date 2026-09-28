@@ -19,6 +19,7 @@ from .block import DFL, SAVPE, BNContrastiveHead, ContrastiveHead, Proto, Proto2
 from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
+from .ftsc import AnchorFreeFTSCCalibrator
 
 __all__ = (
     "OBB",
@@ -621,6 +622,83 @@ class P2NUDFLDetect(Detect):
         self.register_buffer("p2_dfl_bins", torch.tensor(P2_NUDFL_BINS), persistent=True)
 
 
+class FTSCF5Calibrator(nn.Module):
+    """Lightweight F5 supervision calibrator used after TAL assignment only.
+
+    The module has no inference path.  It follows the YOLO-FTSC F5 recipe:
+    position-Gaussian and detached DFL-distribution evidence are centered per
+    GT, clipped in log space and applied as residual positive-loss weights.
+    """
+
+    def __init__(self, config: dict, reg_max: int) -> None:
+        super().__init__()
+        config = dict(config or {})
+        if str(config.get("policy", "f5")).lower() != "f5":
+            raise ValueError("This project supports FTSC policy='f5' only.")
+        self.reg_max = int(reg_max)
+        self.position_alpha = float(config.get("position_alpha", 6.0))
+        self.entropy_tau = float(config.get("dfl_entropy_tau", 1.0))
+        self.log_clip = float(config.get("log_clip", 0.35))
+        self.warmup_epochs = int(config.get("warmup_epochs", 5))
+        self.ramp_epochs = max(int(config.get("ramp_epochs", 10)), 1)
+        self.apply_cls = bool(config.get("apply_cls", True))
+        self.apply_box = bool(config.get("apply_box", True))
+        self.apply_dfl = bool(config.get("apply_dfl", True))
+        # F5 uses a learnable position strength and fixed DFL strength 1.0.
+        self.position_strength_logit = nn.Parameter(torch.tensor(0.0))
+        self.register_buffer("dfl_strength", torch.tensor(float(config.get("dfl_strength", 1.0))))
+        self.last_metrics: dict[str, float] = {}
+
+    @staticmethod
+    def _center_per_gt(values: torch.Tensor, fg_mask: torch.Tensor, target_gt_idx: torch.Tensor) -> torch.Tensor:
+        groups = target_gt_idx[fg_mask].long()
+        if not values.numel():
+            return values
+        n_groups = int(groups.max().item()) + 1
+        sums = values.new_zeros(n_groups).scatter_add_(0, groups, values)
+        counts = values.new_zeros(n_groups).scatter_add_(0, groups, torch.ones_like(values))
+        return values - sums[groups] / counts[groups].clamp_min(1.0)
+
+    def _ramp(self, epoch: int) -> float:
+        if epoch < self.warmup_epochs:
+            return 0.0
+        return min(1.0, (epoch - self.warmup_epochs + 1) / self.ramp_epochs)
+
+    def forward(self, anchor_points_px, target_bboxes_px, target_gt_idx, fg_mask, pred_distri, epoch: int = 0):
+        if not fg_mask.any():
+            empty = pred_distri.new_empty(0)
+            return {"cls": empty, "box": empty, "dfl": empty, "regularization": pred_distri.sum() * 0.0}
+        points = anchor_points_px.unsqueeze(0).expand(target_bboxes_px.shape[0], -1, -1)[fg_mask]
+        boxes = target_bboxes_px[fg_mask]
+        centers = (boxes[:, :2] + boxes[:, 2:]) * 0.5
+        sizes = (boxes[:, 2:] - boxes[:, :2]).clamp_min(1e-6)
+        position = -0.5 * ((points - centers) / (sizes / self.position_alpha).clamp_min(1e-6)).square().sum(-1)
+        logits = pred_distri[fg_mask].reshape(-1, 4, self.reg_max).float()
+        probs = logits.softmax(-1)
+        entropy = -(probs * probs.clamp_min(1e-9).log()).sum(-1).mean(-1) / math.log(self.reg_max)
+        dfl = (-self.entropy_tau * entropy).detach().to(position.dtype)
+        position = self._center_per_gt(position, fg_mask, target_gt_idx)
+        dfl = self._center_per_gt(dfl, fg_mask, target_gt_idx)
+        strength = 2.0 * self.position_strength_logit.sigmoid()
+        log_weight = (strength * position + self.dfl_strength * dfl).clamp(-self.log_clip, self.log_clip)
+        weight = 1.0 + self._ramp(int(epoch)) * (log_weight.exp() - 1.0)
+        self.last_metrics = {
+            "ftsc_positive_count": float(weight.numel()), "ftsc_position_strength": float(strength.detach()),
+            "ftsc_weight_mean": float(weight.detach().mean()), "ftsc_dfl_entropy_mean": float(entropy.detach().mean()),
+        }
+        one = torch.ones_like(weight)
+        return {"cls": weight if self.apply_cls else one, "box": weight if self.apply_box else one,
+                "dfl": weight if self.apply_dfl else one,
+                "regularization": 1e-4 * (strength - 1.0).square()}
+
+
+# Keep the historical local symbol for YAML/parser compatibility, but use the
+# canonical FTSC implementation shared with the reference FTSC repository.
+# This alias is intentionally placed after the legacy class definition so old
+# imports remain valid while all new heads instantiate AnchorFreeFTSCCalibrator.
+FTSCF5Calibrator = AnchorFreeFTSCCalibrator
+
+
 class SRMClsDetect(Detect):
     """Detect with SRM-guided classification at P2 and ordinary deeper levels.
 
@@ -635,7 +713,14 @@ class SRMClsDetect(Detect):
             raise ValueError(f"SRMClsDetect expects [F2_reg, F2_cls] or [F2_reg, F2_cls, P3, P4], got {ch}")
         if ch[0] != ch[1]:
             raise ValueError(f"SRMClsDetect requires matching F2 channels, got {ch}")
+        # ``parse_model`` always appends the YAML-level FTSC field for this
+        # head. Pop it even when it is ``None`` so legacy SRMClsDetect YAMLs
+        # retain the exact Detect constructor arity.
+        ftsc = args[-1] if args else None
+        if args:
+            args = args[:-1]
         super().__init__(nc, reg_max, end2end, (ch[0], *ch[2:]), *args, **kwargs)
+        self.ftsc_calibrator = FTSCF5Calibrator(ftsc, reg_max) if ftsc and ftsc.get("enabled", True) else None
         self.last_reg_feature = None
         self.last_cls_feature = None
 
@@ -647,6 +732,57 @@ class SRMClsDetect(Detect):
         cls_features = [cls_x, *deep_x]
         self.last_reg_feature = reg_x.detach()
         self.last_cls_feature = cls_x.detach()
+        preds = self.forward_head(reg_features, cls_x=cls_features, **self.one2many)
+        if self.end2end:
+            one2one = self.forward_head(
+                [feature.detach() for feature in reg_features],
+                cls_x=[feature.detach() for feature in cls_features],
+                **self.one2one,
+            )
+            preds = {"one2many": preds, "one2one": one2one}
+        if self.training:
+            return preds
+        y = self._inference(preds["one2one"] if self.end2end else preds)
+        if self.end2end:
+            y = self.postprocess(y.permute(0, 2, 1))
+        return y if self.export else (y, preds)
+
+
+class FTSCDetect(Detect):
+    """Ordinary multi-level Detect with training-only FTSC-F5 calibration."""
+
+    def __init__(self, nc: int = 80, reg_max: int = 16, end2end: bool = False, ch: tuple = (), *args, **kwargs):
+        ftsc = args[-1] if args else None
+        if args:
+            args = args[:-1]
+        super().__init__(nc, reg_max, end2end, ch, *args, **kwargs)
+        self.ftsc_calibrator = FTSCF5Calibrator(ftsc, reg_max) if ftsc and ftsc.get("enabled", True) else None
+
+
+class ContrastClsFTSCDetect(FTSCDetect):
+    """FTSC-compatible three-level head with separate cls features.
+
+    YAML input order is ``[P2_reg, P2_cls, P3_reg, P3_cls, P4_reg, P4_cls]``.
+    Only the classification branch sees contrast guidance; regression tensors
+    are passed to the inherited box heads unchanged.
+    """
+
+    def __init__(self, nc: int = 80, reg_max: int = 16, end2end: bool = False, ch: tuple = (), *args, **kwargs):
+        if len(ch) != 6:
+            raise ValueError(f"ContrastClsFTSCDetect expects six tensors, got {ch}")
+        if any(ch[i] != ch[i + 1] for i in (0, 2, 4)):
+            raise ValueError(f"Contrast cls/reg channel pairs must match, got {ch}")
+        super().__init__(nc, reg_max, end2end, (ch[0], ch[2], ch[4]), *args, **kwargs)
+        self.last_reg_features = None
+        self.last_cls_features = None
+
+    def forward(self, x: list[torch.Tensor]):
+        if len(x) != 6:
+            raise ValueError("ContrastClsFTSCDetect forward expects [P2r,P2c,P3r,P3c,P4r,P4c]")
+        reg_features = [x[0], x[2], x[4]]
+        cls_features = [x[1], x[3], x[5]]
+        self.last_reg_features = tuple(feature.detach() for feature in reg_features)
+        self.last_cls_features = tuple(feature.detach() for feature in cls_features)
         preds = self.forward_head(reg_features, cls_x=cls_features, **self.one2many)
         if self.end2end:
             one2one = self.forward_head(

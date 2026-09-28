@@ -231,6 +231,19 @@ mixup: 0.0 # (float) MixUp augmentation probability
 cutmix: 0.0 # (float) CutMix augmentation probability
 copy_paste: 0.0 # (float) segmentation copy-paste probability
 copy_paste_mode: flip # (str) copy-paste strategy for segmentation: flip or mixup
+# Detection CP2 (small-object copy-paste) is separate from stock segmentation CopyPaste.
+copy_paste_enabled: false # (bool) enable detection-object copy-paste
+copy_paste_unit: single # (str) source unit for detection CP2
+copy_paste_copies: 1 # (int) number of copied objects
+copy_paste_p: 0.5 # (float) detection CP2 probability
+copy_paste_scale: 1.0 # (float) copied-object scale
+copy_paste_padding: 0.0 # (float) copied-object padding
+copy_paste_blend: hard # (str) hard pixel replacement for detection CP2
+copy_paste_placement: random # (str) random or collision_aware
+copy_paste_max_overlap: 0.0 # (float) maximum copied-box overlap
+copy_paste_max_trials: 30 # (int) placement attempts
+copy_paste_allow_empty_target: true # (bool) allow copy-paste into empty targets
+copy_paste_allow_same_source: true # (bool) allow source and target image to match
 auto_augment: randaugment # (str) classification auto augmentation policy: randaugment, autoaugment, augmix
 erasing: 0.4 # (float) random erasing probability for classification (0.0–1.0)
 

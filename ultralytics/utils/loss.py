@@ -362,17 +362,21 @@ class BboxLoss(nn.Module):
         imgsz: torch.Tensor,
         stride: torch.Tensor,
         quality_weights: torch.Tensor | None = None,
+        ftsc_box_weights: torch.Tensor | None = None,
+        ftsc_dfl_weights: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute IoU and DFL losses for bounding boxes."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
         if quality_weights is not None:
             weight = weight * quality_weights.to(device=weight.device, dtype=weight.dtype).view(-1, 1)
+        box_weight = weight if ftsc_box_weights is None else weight * ftsc_box_weights.to(weight).view(-1, 1)
+        dfl_weight = weight if ftsc_dfl_weights is None else weight * ftsc_dfl_weights.to(weight).view(-1, 1)
         if self.wise_iou is None:
             iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
-            loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+            loss_iou = ((1.0 - iou) * box_weight).sum() / target_scores_sum
         else:
             iou_loss, _ = self.wise_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask])
-            loss_iou = (iou_loss.unsqueeze(-1) * weight).sum() / target_scores_sum
+            loss_iou = (iou_loss.unsqueeze(-1) * box_weight).sum() / target_scores_sum
 
         # DFL loss
         if self.dfl_loss:
@@ -403,7 +407,7 @@ class BboxLoss(nn.Module):
                     loss_dfl[~positive_is_p2] = self.dfl_loss(
                         positive_pred[~positive_is_p2].flatten(0, 1), positive_target[~positive_is_p2]
                     )
-            loss_dfl = loss_dfl * weight
+            loss_dfl = loss_dfl * dfl_weight
             loss_dfl = loss_dfl.sum() / target_scores_sum
         else:
             target_ltrb = bbox2dist(anchor_points, target_bboxes)
@@ -415,7 +419,7 @@ class BboxLoss(nn.Module):
             pred_dist[..., 0::2] /= imgsz[1]
             pred_dist[..., 1::2] /= imgsz[0]
             loss_dfl = (
-                F.l1_loss(pred_dist[fg_mask], target_ltrb[fg_mask], reduction="none").mean(-1, keepdim=True) * weight
+                F.l1_loss(pred_dist[fg_mask], target_ltrb[fg_mask], reduction="none").mean(-1, keepdim=True) * dfl_weight
             )
             loss_dfl = loss_dfl.sum() / target_scores_sum
 
@@ -1575,6 +1579,14 @@ class v8DetectionLoss:
         target_scores_sum = max(target_scores.sum(), 1)
         cls_target_scores = target_scores
         cls_target_scores_sum = target_scores_sum
+        ftsc_weights = None
+        ftsc_calibrator = getattr(self.model.model[-1], "ftsc_calibrator", None)
+        if ftsc_calibrator is not None and fg_mask.any():
+            ftsc_weights = ftsc_calibrator(
+                anchor_points * stride_tensor, target_bboxes, target_gt_idx, fg_mask, pred_distri,
+                epoch=int(getattr(self, "epoch", 0)),
+            )
+        self.ftsc_metrics = dict(getattr(ftsc_calibrator, "last_metrics", {})) if ftsc_calibrator is not None else {}
         assigned_iou = None
         # Use the same coordinate scale as bbox loss. If target_bboxes has already been divided by stride_tensor,
         # do not divide again.
@@ -1610,6 +1622,10 @@ class v8DetectionLoss:
             ).squeeze(-1).clamp(0)
         # Compute size-aware classification weights
         cls_weights = torch.ones_like(cls_target_scores)
+        if ftsc_weights is not None:
+            dense_ftsc = torch.ones_like(cls_weights[..., 0])
+            dense_ftsc[fg_mask] = ftsc_weights["cls"].to(dtype=dense_ftsc.dtype)
+            cls_weights = cls_weights * torch.where(target_scores > 0, dense_ftsc.unsqueeze(-1), 1.0)
         import os
         variant = os.environ.get("YOLO_VARIANT", "")
         if "small_weight" in variant and fg_mask.sum():
@@ -1727,7 +1743,11 @@ class v8DetectionLoss:
                 imgsz,
                 stride_tensor,
                 quality_weights,
+                ftsc_weights["box"] if ftsc_weights is not None else None,
+                ftsc_weights["dfl"] if ftsc_weights is not None else None,
             )
+            if ftsc_weights is not None:
+                loss[1] = loss[1] + ftsc_weights["regularization"]
             if self.bbox_loss.last_p2_conflict is not None:
                 h2, w2 = preds["feats"][0].shape[-2:]
                 self.dbss_assignment_context["p2_dfl_conflict"] = self.bbox_loss.last_p2_conflict[:, :n_p2].reshape(

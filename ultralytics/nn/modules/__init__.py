@@ -52,6 +52,7 @@ from .block import (
     C2fNAT,
     C2fPSA,
     EnSimAM,
+    MS_Scharr_EnSimAM,
     EnSimAMEdgeRepC2f,
     FeatureDGFE,
     GCTS,
@@ -99,6 +100,7 @@ from .block import (
     set_boundary_enabled,
 )
 from .local_detail import LocalDetailRepC2f
+from .edge_cue import EdgeCueFusion, P2EdgeCueFusion, P3EdgeCueFusion, oriented_edge_responses
 from .carafe import CARAFE, P2GuidedCARAFE
 from .p2_guided_ops import (
     P2GuidedDeformConv,
@@ -112,6 +114,8 @@ from .saturation_fusion import (
     SaturationGuidedP3Residual, SaturationP2Cue, SaturationP2Residual, SaturationStemF2Residual,
 )
 from .srm_f2_guidance import SRMF2Guidance
+from .explicit_cues import ExplicitCueGuidance, RGBExplicitCue
+from .contrast_arch import ASFHighResFusion, ContrastClsGuidance, ContrastSharedSENetV2EnSimAM, SENetV2
 from .paper_guidance import ResidualMSSEnSimAM, SRMEdgeRefine, SRMSemanticGate, SaturationSAGRIFPNP2
 from .conv import (
     CBAM,
@@ -135,11 +139,14 @@ from .asrm import (
     InputASRMAttentionGuidedP2, InputASRMAuxiliaryAttention,
     InputGuidedContextRefine, InputGuidedP2P3ContextRefine, InputGuidedP34ContextRefine, P2ASRMFusion, SPGFusion,
 )
+from .ftsc import AnchorFreeFTSCCalibrator
 from .head import (
     OBB,
     OBB26,
     Classify,
     Detect,
+    FTSCDetect,
+    ContrastClsFTSCDetect,
     SRMClsDetect,
     DetectClsAttention,
     HVDecoupledDetect,
@@ -201,6 +208,10 @@ __all__ = (
     "ADown",
     "ASRMCandidateSparseRefine",
     "AdaptiveSRM",
+    "ASFHighResFusion",
+    "ContrastClsGuidance",
+    "ContrastSharedSENetV2EnSimAM",
+    "SENetV2",
     "RGBToHSV",
     "RGBColorAugment",
     "AdversarialPerturbationInjection",

@@ -50,6 +50,7 @@ __all__ = (
     "C2fNAT",
     "C2fPSA",
     "EnSimAM",
+    "MS_Scharr_EnSimAM",
     "EnSimAMEdgeRepC2f",
     "FeatureDGFE",
     "GCTS",

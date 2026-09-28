@@ -37,8 +37,14 @@ from ultralytics.nn.modules import (
     AdaptiveSRM,
     RGBToHSV,
     RGBColorAugment,
+    RGBExplicitCue,
+    EdgeCueFusion,
+    P2EdgeCueFusion,
+    P3EdgeCueFusion,
+    ExplicitCueGuidance,
     AdversarialPerturbationInjection,
     ASFAttention,
+    ASFHighResFusion,
     BiLevelRoutingAttention,
     BoundaryFeatureBlock,
     ConflictFineReconstruction,
@@ -54,6 +60,11 @@ from ultralytics.nn.modules import (
     C2fNAT,
     C2fPSA,
     EnSimAM,
+    ContrastClsGuidance,
+    ContrastSharedSENetV2EnSimAM,
+    ContrastClsFTSCDetect,
+    SENetV2,
+    MS_Scharr_EnSimAM,
     EnSimAMEdgeRepC2f,
     FeatureDGFE,
     GCTS,
@@ -72,6 +83,7 @@ from ultralytics.nn.modules import (
     Conv2,
     ConvTranspose,
     Detect,
+    FTSCDetect,
     SRMClsDetect,
     DetectClsAttention,
     HVDecoupledDetect,
@@ -275,9 +287,11 @@ class BaseModel(torch.nn.Module):
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
-            if profile and not isinstance(m, FeatureDGFE):
+            if profile and not isinstance(m, (FeatureDGFE, EdgeCueFusion)):
                 self._profile_one_layer(m, x, dt)
-            if isinstance(m, FeatureDGFE):
+            if isinstance(m, (EdgeCueFusion,)):
+                x = m(x, img0)
+            elif isinstance(m, FeatureDGFE):
                 x = m(x, img0)
                 if m.last_aux is not None:
                     dgfe_aux.append(m.last_aux)
@@ -304,7 +318,9 @@ class BaseModel(torch.nn.Module):
         for m in self.model:
             if m.f != -1:
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]
-            if isinstance(m, FeatureDGFE):
+            if isinstance(m, (EdgeCueFusion,)):
+                x = m(x, img0)
+            elif isinstance(m, FeatureDGFE):
                 x = m(x, img0)
                 if m.last_aux is not None:
                     dgfe_aux.append(m.last_aux)
@@ -694,6 +710,7 @@ class BaseModel(torch.nn.Module):
         loss, items = self.criterion(preds, batch)
         diagnostics = {}
         diagnostics.update(getattr(self.criterion, "positive_confidence_rescue_metrics", {}))
+        diagnostics.update(getattr(self.criterion, "ftsc_metrics", {}))
         diagnostics.update(getattr(self.criterion, "consensus_metrics", {}))
         diagnostics.update(getattr(self.criterion, "psd_metrics", {}))
         assignment_context = getattr(self.criterion, "dbss_assignment_context", None)
@@ -2190,6 +2207,7 @@ def parse_model(d, ch, verbose=True):
     box_detail_kernel = d.get("box_detail_kernel", 3)
     box_detail_gate = d.get("box_detail_gate", True)
     p2_offset_regression = d.get("p2_offset_regression", False)
+    ftsc = d.get("ftsc", None)
     p1_reg_injection = d.get("p1_reg_injection", False)
     depth, width, kpt_shape = (d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape"))
     scale = d.get("scale")
@@ -2315,6 +2333,8 @@ def parse_model(d, ch, verbose=True):
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m is RGBColorAugment:
             c2 = 3 + int(args[0]) + int(args[1])
+        elif m is RGBExplicitCue:
+            c2 = 4
         elif m in base_modules:
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 != nc (e.g., Classify() output)
@@ -2354,6 +2374,9 @@ def parse_model(d, ch, verbose=True):
         elif m is CARAFE:
             c2 = ch[f]
             args = [c2, *args]
+        elif m in frozenset({EdgeCueFusion, P2EdgeCueFusion, P3EdgeCueFusion}):
+            c2 = ch[f]
+            args = [c2, *args]
         elif m is ASFAttention:
             c2 = ch[f]
             args = [c2, *args]
@@ -2379,10 +2402,14 @@ def parse_model(d, ch, verbose=True):
         elif m is P1DRR:
             c2 = ch[f[0]]
             args = [[ch[x] for x in f], *args]
-        elif m is EnSimAM:
+        elif m in frozenset({EnSimAM, MS_Scharr_EnSimAM}):
             c2 = ch[f]
         elif m is WeightedAdd:
             c2 = ch[f[0]] if isinstance(f, list) else ch[f]
+            if isinstance(f, list):
+                # The YAML source list defines how many aligned inputs are
+                # fused; do not leave the module at its two-input default.
+                args = [len(f), *args]
         elif m is AIFI:
             args = [ch[f], *args]
         elif m in frozenset({HGStem, HGBlock}):
@@ -2400,6 +2427,8 @@ def parse_model(d, ch, verbose=True):
         elif m in frozenset(
             {
                 Detect,
+                FTSCDetect,
+                ContrastClsFTSCDetect,
                 SRMClsDetect,
                 DetectClsAttention,
                 HVDecoupledDetect,
@@ -2445,7 +2474,7 @@ def parse_model(d, ch, verbose=True):
                 args.append(attn_type)
             else:
                 args.extend([reg_max, end2end, [ch[x] for x in f]])
-                if m in {Detect, SRMClsDetect, HVDecoupledDetect, P2NUDFLDetect, P3NUDFLDetect}:
+                if m in {Detect, FTSCDetect, ContrastClsFTSCDetect, SRMClsDetect, HVDecoupledDetect, P2NUDFLDetect, P3NUDFLDetect}:
                     args.extend(
                         [
                             cls_geometry_fuse,
@@ -2467,10 +2496,14 @@ def parse_model(d, ch, verbose=True):
                             p1_reg_injection,
                         ]
                     )
+                    if m in {FTSCDetect, ContrastClsFTSCDetect, SRMClsDetect}:
+                        args.append(ftsc)
             if m is Segment or m is YOLOESegment or m is Segment26 or m is YOLOESegment26:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             if m in {
                 Detect,
+                FTSCDetect,
+                ContrastClsFTSCDetect,
                 SRMClsDetect,
                 DetectClsAttention,
                 HVDecoupledDetect,
@@ -2535,6 +2568,15 @@ def parse_model(d, ch, verbose=True):
         elif m is ASRMDetailPriorDownsample:
             c2 = 1
             args = [ch[f] if isinstance(f, int) else ch[f[0]], *args]
+        elif m is ExplicitCueGuidance:
+            c2 = ch[f[0]]
+            args = [[ch[x] for x in f], *args]
+        elif m in {ContrastSharedSENetV2EnSimAM, ContrastClsGuidance}:
+            c2 = ch[f[0]]
+            args = [[ch[x] for x in f], *args]
+        elif m is ASFHighResFusion:
+            c2 = args[0]
+            args = [[ch[x] for x in f], *args]
         elif m is SaturationP2Cue:
             c2 = args[0]
             args = [ch[f], *args]
