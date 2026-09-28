@@ -14,6 +14,14 @@ def explicit_cue(rgb: torch.Tensor, cue: str, eps: float = 1e-6) -> torch.Tensor
     if cue == "contrast":
         mu = F.avg_pool2d(y, 7, 1, 3)
         return (torch.abs(y - mu) / (mu + eps)).clamp_(0, 5) / 5
+    if cue == "local_chroma_contrast":
+        # Chroma is the local colour spread (max RGB - min RGB).  Comparing it
+        # with a neighbourhood average emphasizes coloured targets against
+        # similarly bright but chromatically uniform background, while keeping
+        # the cue deterministic and differentiable.
+        chroma = rgb.amax(dim=1, keepdim=True) - rgb.amin(dim=1, keepdim=True)
+        mu = F.avg_pool2d(chroma, 7, 1, 3)
+        return (torch.abs(chroma - mu) / (mu + eps)).clamp_(0, 5) / 5
     if cue == "scharr":
         kx = y.new_tensor(((-3., 0., 3.), (-10., 0., 10.), (-3., 0., 3.))).view(1, 1, 3, 3)
         ky = y.new_tensor(((-3., -10., -3.), (0., 0., 0.), (3., 10., 3.))).view(1, 1, 3, 3)
@@ -27,8 +35,8 @@ class RGBExplicitCue(nn.Module):
     """Append exactly one deterministic contrast/Scharr cue to RGB at input."""
     def __init__(self, cue: str) -> None:
         super().__init__()
-        if cue not in {"contrast", "scharr"}:
-            raise ValueError("cue must be 'contrast' or 'scharr'")
+        if cue not in {"contrast", "local_chroma_contrast", "scharr"}:
+            raise ValueError("cue must be 'contrast', 'local_chroma_contrast', or 'scharr'")
         self.cue = cue
         self.out_channels = 4
 

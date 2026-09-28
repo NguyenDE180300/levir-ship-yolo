@@ -65,11 +65,12 @@ class _ContrastStatsMixin:
 class ContrastSharedSENetV2EnSimAM(nn.Module, _ContrastStatsMixin):
     """Contrast residual guidance followed by SENetV2 and EnSimAM refinement."""
 
-    def __init__(self, channels: list[int] | tuple[int, int], hidden: int = 32) -> None:
+    def __init__(self, channels: list[int] | tuple[int, int], hidden: int = 32, cue: str = "contrast") -> None:
         super().__init__()
         feature_ch, rgb_ch = channels
         if rgb_ch != 3:
             raise ValueError("ContrastSharedSENetV2EnSimAM requires an RGB tap")
+        self.cue = cue
         self.encoder = _ContrastCueEncoder(feature_ch, hidden)
         gate_hidden = max(8, min(hidden, feature_ch))
         self.gate = nn.Sequential(
@@ -84,7 +85,7 @@ class ContrastSharedSENetV2EnSimAM(nn.Module, _ContrastStatsMixin):
 
     def forward(self, values: list[torch.Tensor] | tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         feature, rgb = values
-        cue = F.interpolate(explicit_cue(rgb, "contrast"), size=feature.shape[-2:], mode="area")
+        cue = F.interpolate(explicit_cue(rgb, self.cue), size=feature.shape[-2:], mode="area")
         projected = self.encoder(cue)
         gate = torch.sigmoid(self.gate(torch.cat((feature, projected), dim=1)))
         self._record_stats(gate)

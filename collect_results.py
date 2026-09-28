@@ -37,6 +37,7 @@ CASES += (
     "baseline_gap_factorized_k15_rgb_contrast_p2p3p4_guidance_ftsc_f5_p2p3p4_asf_ms_scharr",
     "baseline_gap_factorized_k15_rgb_contrast_p2p3p4_guidance_ftsc_f5_p2p3p4_asf_ms_scharr_cp2",
     "baseline_gap_factorized_k15_contrast_shared_p2p3_senetv2_ensimam_asf_ftsc_f5_p2p3p4",
+    "baseline_gap_factorized_k15_local_chroma_contrast_shared_p2p3_senetv2_ensimam_asf_ftsc_f5_p2p3p4",
     "baseline_gap_factorized_k15_contrast_cls_p2p3p4_senetv2_ensimam_asf_ftsc_f5_p2p3p4",
 )
 METRICS = ("bbox_mAP", "bbox_mAP_50", "bbox_mAP_75", "precision", "recall")
