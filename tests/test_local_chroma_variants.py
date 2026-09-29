@@ -13,6 +13,7 @@ from ultralytics.nn.modules import (
     LocalChromaContrast9x9,
     LocalChromaSharedGuidance,
     SENetV2EnSimAM,
+    SPPF,
 )
 
 
@@ -31,6 +32,16 @@ def _tensor_sum(value):
     return torch.tensor(0.0)
 
 
+def _all_finite(value):
+    if isinstance(value, torch.Tensor):
+        return bool(torch.isfinite(value).all())
+    if isinstance(value, dict):
+        return all(_all_finite(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(_all_finite(v) for v in value)
+    return True
+
+
 def _build(path):
     return YOLO(str(path)).model
 
@@ -42,7 +53,9 @@ def test_shared_local_chroma_graph_and_gradients():
     cues = [m for m in modules if isinstance(m, LocalChromaContrast9x9)]
     assert len(cues) == 1 and len(guides) == 2
     assert not any(isinstance(m, ASFHighResFusion) for m in modules)
+    assert any(isinstance(m, SPPF) for m in modules)
     assert isinstance(model.model[-1], FTSCDetect) and not isinstance(model.model[-1], ContrastClsFTSCDetect)
+    assert model.model[-1].ftsc_calibrator is not None
     assert model.stride.tolist() == [4.0, 8.0, 16.0]
     assert all(float(m.gamma) == 0.0 for m in guides)
 
@@ -51,7 +64,9 @@ def test_shared_local_chroma_graph_and_gradients():
     for guide in guides:
         guide.gamma.data.fill_(0.1)
     model.train()
-    loss = _tensor_sum(model(torch.rand(1, 3, 128, 128)))
+    output = model(torch.rand(1, 3, 128, 128))
+    assert _all_finite(output)
+    loss = _tensor_sum(output)
     loss.backward()
     hook.remove()
     assert calls[0] == 1
@@ -71,12 +86,15 @@ def test_cls_only_regression_isolation_and_gradients():
     assert len(cues) == 1 and len(guides) == 3 and len(refiners) == 2
     assert isinstance(head, ContrastClsFTSCDetect)
     assert not any(isinstance(m, ASFHighResFusion) for m in modules)
+    assert any(isinstance(m, SPPF) for m in modules)
+    assert head.ftsc_calibrator is not None
     assert model.stride.tolist() == [4.0, 8.0, 16.0]
     assert all(float(m.gamma) == 0.0 for m in guides)
 
     image = torch.rand(1, 3, 128, 128)
     with torch.no_grad():
-        model(image)
+        output = model(image)
+        assert _all_finite(output)
         reg_zero = tuple(x.clone() for x in head.last_reg_features)
         cls_zero = tuple(x.clone() for x in head.last_cls_features)
         for guide in guides:
