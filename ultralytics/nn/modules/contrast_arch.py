@@ -62,6 +62,75 @@ class _ContrastStatsMixin:
         }
 
 
+class LocalChromaContrast9x9(nn.Module):
+    """Compute the deterministic full-resolution local-chroma cue once."""
+
+    out_channels = 1
+
+    def forward(self, rgb: torch.Tensor) -> torch.Tensor:
+        return explicit_cue(rgb, "local_chroma_contrast", window=9)
+
+
+class SENetV2EnSimAM(nn.Module):
+    """Sequential high-resolution refinement shared by both ablations."""
+
+    def __init__(self, channels: int) -> None:
+        super().__init__()
+        self.senet = SENetV2(channels)
+        self.ensimam = EnSimAM()
+
+    def forward(self, feature: torch.Tensor) -> torch.Tensor:
+        return self.ensimam(self.senet(feature))
+
+
+class _PrecomputedLocalChromaGuidance(nn.Module, _ContrastStatsMixin):
+    """Common per-level encoder/gate consuming a precomputed C_full tensor."""
+
+    def __init__(self, channels: list[int] | tuple[int, int], hidden: int = 32) -> None:
+        super().__init__()
+        feature_ch, cue_ch = channels
+        if cue_ch != 1:
+            raise ValueError(f"Expected a one-channel precomputed cue, got {cue_ch}")
+        self.encoder = _ContrastCueEncoder(feature_ch, hidden)
+        gate_hidden = max(8, min(hidden, feature_ch))
+        self.gate = nn.Sequential(
+            nn.Conv2d(2 * feature_ch, gate_hidden, 1, bias=False), nn.SiLU(),
+            nn.Conv2d(gate_hidden, gate_hidden, 3, 1, 1, groups=gate_hidden, bias=False), nn.SiLU(),
+            nn.Conv2d(gate_hidden, 1, 1),
+        )
+        self.gamma = nn.Parameter(torch.zeros(()))
+        self.last_attention_stats: dict[str, float] = {}
+
+    def _encoded_gate(self, feature: torch.Tensor, cue_full: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        cue = F.interpolate(cue_full, size=feature.shape[-2:], mode="area")
+        projected = self.encoder(cue)
+        gate = torch.sigmoid(self.gate(torch.cat((feature, projected), dim=1)))
+        self._record_stats(gate)
+        return projected, gate
+
+
+class LocalChromaSharedGuidance(_PrecomputedLocalChromaGuidance):
+    """Shared residual fusion followed sequentially by SENetV2 and EnSimAM."""
+
+    def __init__(self, channels: list[int] | tuple[int, int], hidden: int = 32) -> None:
+        super().__init__(channels, hidden)
+        self.refine = SENetV2EnSimAM(channels[0])
+
+    def forward(self, values: list[torch.Tensor] | tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        feature, cue_full = values
+        projected, gate = self._encoded_gate(feature, cue_full)
+        return self.refine(feature + self.gamma * gate * projected)
+
+
+class LocalChromaClsGuidance(_PrecomputedLocalChromaGuidance):
+    """Classification-only multiplicative modulation from precomputed C_full."""
+
+    def forward(self, values: list[torch.Tensor] | tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        feature, cue_full = values
+        _, gate = self._encoded_gate(feature, cue_full)
+        return feature * (1.0 + self.gamma * gate)
+
+
 class ContrastSharedSENetV2EnSimAM(nn.Module, _ContrastStatsMixin):
     """Contrast residual guidance followed by SENetV2 and EnSimAM refinement."""
 
@@ -141,5 +210,6 @@ class ASFHighResFusion(nn.Module):
 
 
 __all__ = (
-    "SENetV2", "ContrastSharedSENetV2EnSimAM", "ContrastClsGuidance", "ASFHighResFusion",
+    "SENetV2", "SENetV2EnSimAM", "LocalChromaContrast9x9", "LocalChromaSharedGuidance",
+    "LocalChromaClsGuidance", "ContrastSharedSENetV2EnSimAM", "ContrastClsGuidance", "ASFHighResFusion",
 )

@@ -63,7 +63,11 @@ from ultralytics.nn.modules import (
     ContrastClsGuidance,
     ContrastSharedSENetV2EnSimAM,
     ContrastClsFTSCDetect,
+    LocalChromaClsGuidance,
+    LocalChromaContrast9x9,
+    LocalChromaSharedGuidance,
     SENetV2,
+    SENetV2EnSimAM,
     MS_Scharr_EnSimAM,
     EnSimAMEdgeRepC2f,
     FeatureDGFE,
@@ -2571,9 +2575,14 @@ def parse_model(d, ch, verbose=True):
         elif m is ExplicitCueGuidance:
             c2 = ch[f[0]]
             args = [[ch[x] for x in f], *args]
-        elif m in {ContrastSharedSENetV2EnSimAM, ContrastClsGuidance}:
+        elif m in {ContrastSharedSENetV2EnSimAM, ContrastClsGuidance, LocalChromaSharedGuidance, LocalChromaClsGuidance}:
             c2 = ch[f[0]]
             args = [[ch[x] for x in f], *args]
+        elif m is LocalChromaContrast9x9:
+            c2 = 1
+        elif m is SENetV2EnSimAM:
+            c2 = ch[f]
+            args = [c2, *args]
         elif m is ASFHighResFusion:
             c2 = args[0]
             args = [[ch[x] for x in f], *args]

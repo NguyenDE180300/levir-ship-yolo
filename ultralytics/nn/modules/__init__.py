@@ -115,7 +115,16 @@ from .saturation_fusion import (
 )
 from .srm_f2_guidance import SRMF2Guidance
 from .explicit_cues import ExplicitCueGuidance, RGBExplicitCue
-from .contrast_arch import ASFHighResFusion, ContrastClsGuidance, ContrastSharedSENetV2EnSimAM, SENetV2
+from .contrast_arch import (
+    ASFHighResFusion,
+    ContrastClsGuidance,
+    ContrastSharedSENetV2EnSimAM,
+    LocalChromaClsGuidance,
+    LocalChromaContrast9x9,
+    LocalChromaSharedGuidance,
+    SENetV2,
+    SENetV2EnSimAM,
+)
 from .paper_guidance import ResidualMSSEnSimAM, SRMEdgeRefine, SRMSemanticGate, SaturationSAGRIFPNP2
 from .conv import (
     CBAM,
@@ -211,6 +220,10 @@ __all__ = (
     "ASFHighResFusion",
     "ContrastClsGuidance",
     "ContrastSharedSENetV2EnSimAM",
+    "LocalChromaClsGuidance",
+    "LocalChromaContrast9x9",
+    "LocalChromaSharedGuidance",
+    "SENetV2EnSimAM",
     "SENetV2",
     "RGBToHSV",
     "RGBColorAugment",

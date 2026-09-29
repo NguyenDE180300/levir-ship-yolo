@@ -20,7 +20,7 @@ def explicit_cue(rgb: torch.Tensor, cue: str, eps: float = 1e-6, window: int = 7
         # similarly bright but chromatically uniform background, while keeping
         # the cue deterministic and differentiable.
         chroma = rgb.amax(dim=1, keepdim=True) - rgb.amin(dim=1, keepdim=True)
-        mu = F.avg_pool2d(chroma, window, 1, window // 2)
+        mu = F.avg_pool2d(chroma, window, 1, window // 2, count_include_pad=False)
         return (torch.abs(chroma - mu) / (mu + eps)).clamp_(0, 5) / 5
     if cue == "scharr":
         kx = y.new_tensor(((-3., 0., 3.), (-10., 0., 10.), (-3., 0., 3.))).view(1, 1, 3, 3)
